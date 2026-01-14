@@ -136,24 +136,34 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setIsRefreshing(true)
     setRefreshStatus("idle")
 
-    console.log("[v0] Settings - Manual token refresh requested")
-    console.log("[v0] Settings - Current access token info:", accessTokenInfo)
-    console.log("[v0] Settings - Current refresh token info:", refreshTokenInfo)
+    console.log("=".repeat(60))
+    console.log("[v0] SETTINGS - Manual token refresh requested")
+    console.log("=".repeat(60))
+    console.log("[v0] SETTINGS - Current token state:")
+    console.log(
+      "  Access Token Expires:",
+      accessTokenInfo.expiresAt ? new Date(accessTokenInfo.expiresAt).toISOString() : "N/A",
+    )
+    console.log("  Access Token Remaining:", accessTokenInfo.timeRemaining)
+    console.log(
+      "  Refresh Token Expires:",
+      refreshTokenInfo.expiresAt ? new Date(refreshTokenInfo.expiresAt).toISOString() : "N/A",
+    )
+    console.log("  Refresh Token Remaining:", refreshTokenInfo.timeRemaining)
 
     try {
       const success = await refreshToken()
-      console.log("[v0] Settings - Refresh result:", success)
+      console.log("[v0] SETTINGS - Refresh completed, success:", success)
       setRefreshStatus(success ? "success" : "error")
       if (success) {
         updateTokenInfo()
-        console.log("[v0] Settings - Token info updated after refresh")
+        console.log("[v0] SETTINGS - Token info updated after refresh")
       }
     } catch (error) {
-      console.error("[v0] Settings - Refresh error:", error)
+      console.error("[v0] SETTINGS - Refresh error:", error)
       setRefreshStatus("error")
     } finally {
       setIsRefreshing(false)
-      // Reset status after 3 seconds
       setTimeout(() => setRefreshStatus("idle"), 3000)
     }
   }

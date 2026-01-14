@@ -45,47 +45,68 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
     }
 
     refreshInProgress.current = true
-    console.log("[v0] TokenRefresh - Starting token refresh...")
+
+    console.log("=".repeat(60))
+    console.log("[v0] AUTH DEBUG - Token Refresh Started")
+    console.log("=".repeat(60))
 
     const requestUrl = "/api/token/refresh"
-    const requestBody = JSON.stringify({})
-    console.log("[v0] TokenRefresh - Request URL:", requestUrl)
-    console.log("[v0] TokenRefresh - Request Method: POST")
-    console.log("[v0] TokenRefresh - Request Body:", requestBody)
+    console.log("[v0] AUTH DEBUG - Internal API Request:")
+    console.log("  URL:", requestUrl)
+    console.log("  Method: POST")
+    console.log("  Body: {}")
 
     try {
       const response = await fetch(requestUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: requestBody,
+        body: JSON.stringify({}),
       })
 
-      console.log("[v0] TokenRefresh - Response Status:", response.status)
-      console.log("[v0] TokenRefresh - Response OK:", response.ok)
-      console.log("[v0] TokenRefresh - Response Headers:", Object.fromEntries(response.headers.entries()))
+      console.log("[v0] AUTH DEBUG - Internal API Response:")
+      console.log("  Status:", response.status)
 
       const responseText = await response.text()
-      console.log("[v0] TokenRefresh - Response Body (raw):", responseText)
+      let responseData: any = null
 
-      if (response.ok) {
-        try {
-          const data = JSON.parse(responseText)
-          console.log("[v0] TokenRefresh - Response Body (parsed):", data)
-          console.log(
-            "[v0] TokenRefresh - Token refreshed successfully, new expiry:",
-            data.expires_at ? new Date(data.expires_at).toISOString() : "unknown",
-          )
-          return true
-        } catch (parseError) {
-          console.error("[v0] TokenRefresh - Failed to parse response JSON:", parseError)
-          return false
+      try {
+        responseData = JSON.parse(responseText)
+      } catch (e) {
+        console.log("  Body (raw text):", responseText)
+      }
+
+      if (responseData) {
+        console.log("  Body (parsed):", responseData)
+
+        // Log the 1health request/response details if present
+        if (responseData.debug) {
+          console.log("-".repeat(60))
+          console.log("[v0] AUTH DEBUG - 1health OAuth Details:")
+          console.log("  Step:", responseData.debug.step)
+          console.log("  Base URL:", responseData.debug.baseUrl)
+          console.log("  Token URL:", responseData.debug.tokenUrl)
+          console.log("  Request Body:", responseData.debug.requestBody)
+          console.log("  Response Status:", responseData.debug.responseStatus)
+          console.log("  Response Body:", responseData.debug.responseBody)
+          if (responseData.debug.error) {
+            console.log("  Error:", responseData.debug.error)
+          }
+          console.log("-".repeat(60))
         }
+      }
+
+      console.log("=".repeat(60))
+
+      if (response.ok && responseData?.success) {
+        console.log("[v0] AUTH DEBUG - Token refresh SUCCESS")
+        return true
       } else {
-        console.error("[v0] TokenRefresh - Failed to refresh token:", response.status, responseText)
+        console.error("[v0] AUTH DEBUG - Token refresh FAILED")
         return false
       }
     } catch (error) {
-      console.error("[v0] TokenRefresh - Network error:", error)
+      console.error("[v0] AUTH DEBUG - Network error:", error)
+      console.log("=".repeat(60))
       return false
     } finally {
       refreshInProgress.current = false

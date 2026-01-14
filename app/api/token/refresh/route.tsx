@@ -15,32 +15,45 @@ interface TokenResponse {
 }
 
 export async function POST() {
-  console.log("[v0] Token refresh route called")
-
-  const cookieStore = await cookies()
-  const refreshToken = cookieStore.get("refresh_token")?.value
-  let baseUrl = process.env.NEXT_PUBLIC_1H_URL || "https://app.1health.io"
-  // Remove trailing /api or /api/ if present - OAuth endpoint is at root, not under /api
-  baseUrl = baseUrl.replace(/\/api\/?$/, "")
-
-  console.log("[v0] Base URL for OAuth (after stripping /api):", baseUrl)
-
-  if (!refreshToken) {
-    console.log("[v0] No refresh token found in cookies")
-    return NextResponse.json({ error: "No refresh token available" }, { status: 401 })
-  }
-
-  console.log("[v0] Found refresh token, length:", refreshToken.length)
+  const debugInfo: {
+    step: string
+    baseUrl?: string
+    tokenUrl?: string
+    requestBody?: string
+    responseStatus?: number
+    responseBody?: string
+    error?: string
+  } = { step: "init" }
 
   try {
+    const cookieStore = await cookies()
+    const refreshToken = cookieStore.get("refresh_token")?.value
+    let baseUrl = process.env.NEXT_PUBLIC_1H_URL || "https://app.1health.io"
+    // Remove trailing /api or /api/ if present - OAuth endpoint is at root, not under /api
+    baseUrl = baseUrl.replace(/\/api\/?$/, "")
+
+    debugInfo.step = "url_resolved"
+    debugInfo.baseUrl = baseUrl
+
+    if (!refreshToken) {
+      debugInfo.step = "no_refresh_token"
+      debugInfo.error = "No refresh token found in cookies"
+      return NextResponse.json(
+        {
+          error: "No refresh token available",
+          debug: debugInfo,
+        },
+        { status: 401 },
+      )
+    }
+
     const tokenUrl = `${baseUrl}/auth/oauth2/token`
-    console.log("[v0] Calling 1health OAuth endpoint:", tokenUrl)
+    debugInfo.tokenUrl = tokenUrl
 
     const requestBody = `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}&client_id=public-client`
-    console.log(
-      "[v0] Request body (token redacted):",
-      `grant_type=refresh_token&refresh_token=[REDACTED]&client_id=public-client`,
-    )
+    // Store redacted version for debug
+    debugInfo.requestBody = `grant_type=refresh_token&refresh_token=[TOKEN_LENGTH:${refreshToken.length}]&client_id=public-client`
+    debugInfo.step = "making_request"
 
     const response = await fetch(tokenUrl, {
       method: "POST",
@@ -51,18 +64,46 @@ export async function POST() {
       body: requestBody,
     })
 
-    console.log("[v0] 1health refresh response status:", response.status)
+    debugInfo.responseStatus = response.status
+    debugInfo.step = "response_received"
+
+    const responseText = await response.text()
+    debugInfo.responseBody = responseText
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.log("[v0] 1health refresh error:", errorText)
-      return NextResponse.json({ error: "Failed to refresh token", details: errorText }, { status: response.status })
+      debugInfo.step = "response_error"
+      debugInfo.error = `1health returned ${response.status}`
+      return NextResponse.json(
+        {
+          error: "Failed to refresh token",
+          details: responseText,
+          debug: debugInfo,
+        },
+        { status: response.status },
+      )
     }
 
-    const data: TokenResponse = await response.json()
-    console.log("[v0] Token refresh successful, expires_in:", data.expires_in)
+    let data: TokenResponse
+    try {
+      data = JSON.parse(responseText)
+      debugInfo.step = "success"
+    } catch (e) {
+      debugInfo.step = "parse_error"
+      debugInfo.error = "Failed to parse response as JSON"
+      return NextResponse.json(
+        {
+          error: "Invalid response from 1health",
+          details: responseText,
+          debug: debugInfo,
+        },
+        { status: 500 },
+      )
+    }
 
-    const res = NextResponse.json({ success: true })
+    const res = NextResponse.json({
+      success: true,
+      debug: debugInfo,
+    })
 
     const accessTokenMaxAge = data.expires_in || 3600
     const refreshTokenMaxAge = 7 * 24 * 60 * 60 // 7 days
@@ -105,8 +146,15 @@ export async function POST() {
 
     return res
   } catch (error) {
-    console.error("[v0] Token refresh error:", error)
-    return NextResponse.json({ error: "Internal server error during token refresh" }, { status: 500 })
+    debugInfo.step = "exception"
+    debugInfo.error = String(error)
+    return NextResponse.json(
+      {
+        error: "Internal server error during token refresh",
+        debug: debugInfo,
+      },
+      { status: 500 },
+    )
   }
 }
 
