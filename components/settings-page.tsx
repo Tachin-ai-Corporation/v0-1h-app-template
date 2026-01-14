@@ -136,13 +136,20 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setIsRefreshing(true)
     setRefreshStatus("idle")
 
+    console.log("[v0] Settings - Manual token refresh requested")
+    console.log("[v0] Settings - Current access token info:", accessTokenInfo)
+    console.log("[v0] Settings - Current refresh token info:", refreshTokenInfo)
+
     try {
       const success = await refreshToken()
+      console.log("[v0] Settings - Refresh result:", success)
       setRefreshStatus(success ? "success" : "error")
       if (success) {
         updateTokenInfo()
+        console.log("[v0] Settings - Token info updated after refresh")
       }
-    } catch {
+    } catch (error) {
+      console.error("[v0] Settings - Refresh error:", error)
       setRefreshStatus("error")
     } finally {
       setIsRefreshing(false)

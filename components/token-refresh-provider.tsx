@@ -40,30 +40,52 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
 
   const refreshToken = useCallback(async (): Promise<boolean> => {
     if (refreshInProgress.current) {
-      console.log("[TokenRefresh] Refresh already in progress, skipping")
+      console.log("[v0] TokenRefresh - Refresh already in progress, skipping")
       return false
     }
 
     refreshInProgress.current = true
-    console.log("[TokenRefresh] Proactively refreshing token")
+    console.log("[v0] TokenRefresh - Starting token refresh...")
+
+    const requestUrl = "/api/token/refresh"
+    const requestBody = JSON.stringify({})
+    console.log("[v0] TokenRefresh - Request URL:", requestUrl)
+    console.log("[v0] TokenRefresh - Request Method: POST")
+    console.log("[v0] TokenRefresh - Request Body:", requestBody)
 
     try {
-      const response = await fetch("/api/token/refresh", {
+      const response = await fetch(requestUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: requestBody,
       })
 
+      console.log("[v0] TokenRefresh - Response Status:", response.status)
+      console.log("[v0] TokenRefresh - Response OK:", response.ok)
+      console.log("[v0] TokenRefresh - Response Headers:", Object.fromEntries(response.headers.entries()))
+
+      const responseText = await response.text()
+      console.log("[v0] TokenRefresh - Response Body (raw):", responseText)
+
       if (response.ok) {
-        const data = await response.json()
-        console.log("[TokenRefresh] Token refreshed successfully, new expiry:", new Date(data.expires_at).toISOString())
-        return true
+        try {
+          const data = JSON.parse(responseText)
+          console.log("[v0] TokenRefresh - Response Body (parsed):", data)
+          console.log(
+            "[v0] TokenRefresh - Token refreshed successfully, new expiry:",
+            data.expires_at ? new Date(data.expires_at).toISOString() : "unknown",
+          )
+          return true
+        } catch (parseError) {
+          console.error("[v0] TokenRefresh - Failed to parse response JSON:", parseError)
+          return false
+        }
       } else {
-        console.error("[TokenRefresh] Failed to refresh token:", response.status)
+        console.error("[v0] TokenRefresh - Failed to refresh token:", response.status, responseText)
         return false
       }
     } catch (error) {
-      console.error("[TokenRefresh] Error refreshing token:", error)
+      console.error("[v0] TokenRefresh - Network error:", error)
       return false
     } finally {
       refreshInProgress.current = false
@@ -78,7 +100,7 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
 
     const expiresAt = getTokenExpiresAt()
     if (!expiresAt) {
-      console.log("[TokenRefresh] No expiry timestamp found, skipping check")
+      console.log("[v0] TokenRefresh - No expiry timestamp found, skipping check")
       return
     }
 
@@ -86,17 +108,21 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
     const timeUntilExpiry = expiresAt - now
     const fiveMinutes = 5 * 60 * 1000
 
+    console.log(
+      "[v0] TokenRefresh - Check: expiresAt=",
+      new Date(expiresAt).toISOString(),
+      "timeUntilExpiry=",
+      Math.round(timeUntilExpiry / 1000),
+      "seconds",
+    )
+
     // If token expires within 5 minutes, refresh proactively
     if (timeUntilExpiry < fiveMinutes && timeUntilExpiry > 0) {
-      console.log(
-        "[TokenRefresh] Token expires in",
-        Math.round(timeUntilExpiry / 1000),
-        "seconds, refreshing proactively",
-      )
+      console.log("[v0] TokenRefresh - Token expires soon, refreshing proactively")
       await refreshToken()
     } else if (timeUntilExpiry <= 0) {
       // Token already expired, try to refresh
-      console.log("[TokenRefresh] Token expired, attempting refresh")
+      console.log("[v0] TokenRefresh - Token expired, attempting refresh")
       await refreshToken()
     }
   }, [refreshToken])
@@ -119,7 +145,7 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("[TokenRefresh] Tab became visible, checking token")
+        console.log("[v0] TokenRefresh - Tab became visible, checking token")
         checkAndRefresh()
       }
     }
