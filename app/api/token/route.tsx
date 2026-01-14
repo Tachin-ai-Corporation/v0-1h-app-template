@@ -10,6 +10,8 @@ interface AuthResponse {
   access_token: string
   expires_in: number
   refresh_token: string
+  refresh_token_expires_in?: number
+  id_token?: string
 }
 
 interface DecryptedPayload {
@@ -295,7 +297,7 @@ export async function POST(req: Request) {
 
     // Set cookies for access_token and refresh_token
     const accessTokenMaxAge = authData.expires_in
-    const refreshTokenMaxAge = 60 * 60 * 24 * 7 // 7 days
+    const refreshTokenMaxAge = authData.refresh_token_expires_in || 60 * 60 * 24 * 7
 
     cookieStore.set("access_token", authData.access_token, {
       httpOnly: false,
@@ -315,6 +317,15 @@ export async function POST(req: Request) {
 
     const tokenExpiresAt = Date.now() + accessTokenMaxAge * 1000
     cookieStore.set("token_expires_at", String(tokenExpiresAt), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: refreshTokenMaxAge,
+      path: "/",
+    })
+
+    const refreshExpiresAt = Date.now() + refreshTokenMaxAge * 1000
+    cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
