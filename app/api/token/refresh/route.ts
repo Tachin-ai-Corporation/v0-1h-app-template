@@ -1,19 +1,45 @@
 /**
  * Token Refresh API Route
  *
- * This endpoint is used internally by the auth service to refresh tokens.
- * It can also be called directly from the client if needed.
- *
  * POST /api/token/refresh
  * Body: { refreshToken?: string } - Optional, will use cookie if not provided
  */
 
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { cookies } from "next/headers"
 
-export async function POST(req: Request) {
+export const dynamic = "force-dynamic"
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      Allow: "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    },
+  })
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Token refresh endpoint. Use POST to refresh tokens.",
+    methods: ["POST"],
+  })
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}))
+    let body: { refreshToken?: string } = {}
+    try {
+      const text = await req.text()
+      if (text) {
+        body = JSON.parse(text)
+      }
+    } catch {
+      // Empty body is fine
+    }
+
     const cookieStore = await cookies()
 
     // Use provided refresh token or get from cookies
@@ -33,14 +59,15 @@ export async function POST(req: Request) {
     const response = await fetch(authUrl + "/auth/oauth2/token", {
       method: "POST",
       headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/x-www-form-urlencoded",
+        accept: "application/json, text/plain, */*",
+        "content-type": "application/x-www-form-urlencoded",
       },
       body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}&client_id=public-client`,
     })
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      console.error("[token/refresh] 1health API error:", response.status, errorData)
       return NextResponse.json({ error: "Token refresh failed", details: errorData }, { status: response.status })
     }
 
