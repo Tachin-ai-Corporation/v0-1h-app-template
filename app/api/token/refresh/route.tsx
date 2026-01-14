@@ -19,23 +19,36 @@ export async function POST() {
 
   const cookieStore = await cookies()
   const refreshToken = cookieStore.get("refresh_token")?.value
-  const baseUrl = process.env.NEXT_PUBLIC_1H_URL || "https://app.1health.io"
+  let baseUrl = process.env.NEXT_PUBLIC_1H_URL || "https://app.1health.io"
+  // Remove trailing /api or /api/ if present - OAuth endpoint is at root, not under /api
+  baseUrl = baseUrl.replace(/\/api\/?$/, "")
+
+  console.log("[v0] Base URL for OAuth (after stripping /api):", baseUrl)
 
   if (!refreshToken) {
     console.log("[v0] No refresh token found in cookies")
     return NextResponse.json({ error: "No refresh token available" }, { status: 401 })
   }
 
-  console.log("[v0] Found refresh token, calling 1health OAuth endpoint")
+  console.log("[v0] Found refresh token, length:", refreshToken.length)
 
   try {
-    const response = await fetch(`${baseUrl}/auth/oauth2/token`, {
+    const tokenUrl = `${baseUrl}/auth/oauth2/token`
+    console.log("[v0] Calling 1health OAuth endpoint:", tokenUrl)
+
+    const requestBody = `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}&client_id=public-client`
+    console.log(
+      "[v0] Request body (token redacted):",
+      `grant_type=refresh_token&refresh_token=[REDACTED]&client_id=public-client`,
+    )
+
+    const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
       },
-      body: `grant_type=refresh_token&refresh_token=${encodeURIComponent(refreshToken)}&client_id=public-client`,
+      body: requestBody,
     })
 
     console.log("[v0] 1health refresh response status:", response.status)
