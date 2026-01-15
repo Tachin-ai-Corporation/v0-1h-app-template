@@ -21,6 +21,53 @@ import {
 } from "lucide-react"
 import type { DebugLogEntry } from "@/lib/debug-log-emitter"
 
+function formatLogForConsole(entry: DebugLogEntry): void {
+  const timestamp = new Date(entry.timestamp).toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  })
+
+  const prefix = `[1health API] [${timestamp}] [${entry.source}]`
+
+  if (entry.type === "request") {
+    console.group(`${prefix} → REQUEST`)
+    console.log(`%c${entry.method} ${entry.url}`, "color: #60a5fa; font-weight: bold")
+    if (entry.headers && Object.keys(entry.headers).length > 0) {
+      console.log("Headers:", entry.headers)
+    }
+    if (entry.body) {
+      console.log("Body:", typeof entry.body === "string" ? entry.body : JSON.stringify(entry.body, null, 2))
+    }
+    console.groupEnd()
+  } else if (entry.type === "response") {
+    const statusColor = entry.status && entry.status >= 200 && entry.status < 300 ? "#4ade80" : "#f87171"
+    console.group(`${prefix} ← RESPONSE`)
+    console.log(`%c${entry.method} ${entry.url}`, "color: #60a5fa")
+    console.log(`%cStatus: ${entry.status}`, `color: ${statusColor}; font-weight: bold`)
+    if (entry.duration) {
+      console.log(`Duration: ${entry.duration}ms`)
+    }
+    if (entry.body) {
+      console.log("Body:", typeof entry.body === "string" ? entry.body : entry.body)
+    }
+    console.groupEnd()
+  } else if (entry.type === "error") {
+    console.group(`${prefix} ✖ ERROR`)
+    console.log(`%c${entry.error}`, "color: #f87171; font-weight: bold")
+    if (entry.metadata) {
+      console.log("Details:", entry.metadata)
+    }
+    console.groupEnd()
+  } else if (entry.type === "info") {
+    // Skip connection messages, only log meaningful info
+    if (entry.source !== "debug-stream") {
+      console.log(`${prefix} ℹ ${entry.body}`)
+    }
+  }
+}
+
 export function DebugTrafficConsole() {
   const [isOpen, setIsOpen] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
@@ -49,9 +96,10 @@ export function DebugTrafficConsole() {
       try {
         console.log("[v0] DebugConsole - Received SSE message:", event.data.substring(0, 100) + "...")
         const entry: DebugLogEntry = JSON.parse(event.data)
+        formatLogForConsole(entry)
         setLogs((prev) => [...prev.slice(-499), entry]) // Keep last 500 logs
       } catch (e) {
-        console.error("[v0] DebugConsole - Failed to parse debug log:", e)
+        console.error("[1health API] Failed to parse debug log:", e)
       }
     }
 
