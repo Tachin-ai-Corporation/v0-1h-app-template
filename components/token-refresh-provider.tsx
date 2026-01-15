@@ -1,25 +1,12 @@
 "use client"
 
-import { createContext, useContext, useEffect, useRef, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useRef, useCallback, type ReactNode } from "react"
 
 interface TokenRefreshContextValue {
   refreshToken: () => Promise<boolean>
 }
 
 const TokenRefreshContext = createContext<TokenRefreshContextValue | null>(null)
-
-/**
- * Gets the token expiry timestamp from cookies
- */
-function getTokenExpiresAt(): number | null {
-  if (typeof document === "undefined") return null
-
-  const match = document.cookie.match(/(?:^|; )token_expires_at=([^;]*)/)
-  if (!match) return null
-
-  const expiresAt = Number.parseInt(match[1], 10)
-  return isNaN(expiresAt) ? null : expiresAt
-}
 
 /**
  * Checks if the access token cookie exists
@@ -30,13 +17,11 @@ function hasAccessToken(): boolean {
 }
 
 /**
- * Provider that handles proactive token refresh before expiration.
- * Checks every minute if the token is about to expire (within 5 minutes)
- * and refreshes it proactively to prevent session interruption.
+ * Provider that exposes the token refresh function.
+ * Removed automatic refresh interval - only manual refresh via button or on 401 response
  */
 export function TokenRefreshProvider({ children }: { children: ReactNode }) {
   const refreshInProgress = useRef(false)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const refreshToken = useCallback(async (): Promise<boolean> => {
     if (refreshInProgress.current) {
@@ -70,58 +55,6 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
       refreshInProgress.current = false
     }
   }, [])
-
-  const checkAndRefresh = useCallback(async () => {
-    // Skip if no access token (user not logged in)
-    if (!hasAccessToken()) {
-      return
-    }
-
-    const expiresAt = getTokenExpiresAt()
-    if (!expiresAt) {
-      return
-    }
-
-    const now = Date.now()
-    const timeUntilExpiry = expiresAt - now
-    const fiveMinutes = 5 * 60 * 1000
-
-    // If token expires within 5 minutes, refresh proactively
-    if (timeUntilExpiry < fiveMinutes && timeUntilExpiry > 0) {
-      console.log("[TokenRefresh] Token expires soon, refreshing proactively")
-      await refreshToken()
-    } else if (timeUntilExpiry <= 0) {
-      // Token already expired, try to refresh
-      console.log("[TokenRefresh] Token expired, attempting refresh")
-      await refreshToken()
-    }
-  }, [refreshToken])
-
-  useEffect(() => {
-    // Initial check on mount
-    checkAndRefresh()
-
-    // Check every minute
-    intervalRef.current = setInterval(checkAndRefresh, 60 * 1000)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [checkAndRefresh])
-
-  // Also refresh when tab becomes visible (user returns after being away)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        checkAndRefresh()
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange)
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
-  }, [checkAndRefresh])
 
   return <TokenRefreshContext.Provider value={{ refreshToken }}>{children}</TokenRefreshContext.Provider>
 }

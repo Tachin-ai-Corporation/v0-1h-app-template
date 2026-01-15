@@ -53,18 +53,6 @@ function formatLogForConsole(entry: DebugLogEntry): void {
       console.log("Body:", typeof entry.body === "string" ? entry.body : entry.body)
     }
     console.groupEnd()
-  } else if (entry.type === "error") {
-    console.group(`${prefix} ✖ ERROR`)
-    console.log(`%c${entry.error}`, "color: #f87171; font-weight: bold")
-    if (entry.metadata) {
-      console.log("Details:", entry.metadata)
-    }
-    console.groupEnd()
-  } else if (entry.type === "info") {
-    // Skip connection messages, only log meaningful info
-    if (entry.source !== "debug-stream") {
-      console.log(`${prefix} ℹ ${entry.body}`)
-    }
   }
 }
 
@@ -83,7 +71,6 @@ export function DebugTrafficConsole() {
       eventSourceRef.current.close()
     }
 
-    console.log("[v0] DebugConsole - Attempting to connect to /api/debug/stream")
     const es = new EventSource("/api/debug/stream")
     eventSourceRef.current = es
 
@@ -94,7 +81,6 @@ export function DebugTrafficConsole() {
 
     es.onmessage = (event) => {
       try {
-        console.log("[v0] DebugConsole - Received SSE message:", event.data.substring(0, 100) + "...")
         const entry: DebugLogEntry = JSON.parse(event.data)
         formatLogForConsole(entry)
         setLogs((prev) => [...prev.slice(-499), entry]) // Keep last 500 logs
@@ -103,9 +89,8 @@ export function DebugTrafficConsole() {
       }
     }
 
-    es.onerror = (error) => {
+    es.onerror = () => {
       setIsConnected(false)
-      console.log("[v0] DebugConsole - SSE stream error, reconnecting in 3s...", error)
       setTimeout(connect, 3000)
     }
   }, [])
