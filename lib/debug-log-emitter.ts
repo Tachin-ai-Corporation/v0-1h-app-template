@@ -49,6 +49,9 @@ class DebugLogEmitter extends EventEmitter {
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       timestamp: new Date().toISOString(),
     }
+    console.log(
+      `[v0] debugLogEmitter.emitLog - type: ${fullEntry.type}, source: ${fullEntry.source}, listenerCount: ${this.listenerCount("log")}`,
+    )
     this.emit("log", fullEntry)
   }
 }

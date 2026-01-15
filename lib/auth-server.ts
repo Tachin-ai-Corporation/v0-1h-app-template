@@ -366,9 +366,12 @@ export async function authFetch(
   const method = options.method || "GET"
   const headersObj = Object.fromEntries(headers.entries())
 
-  if (isDebugEnabled()) {
-    emitRequestLog("api-call", method, url, headersObj, logBody as string | object | undefined)
-  }
+  const debugEnabled = isDebugEnabled()
+  console.log(
+    `[v0] authFetch - isDebugEnabled: ${debugEnabled}, NEXT_PUBLIC_ENABLE_DEBUG_STREAM: ${process.env.NEXT_PUBLIC_ENABLE_DEBUG_STREAM}`,
+  )
+
+  emitRequestLog("api-call", method, url, headersObj, logBody as string | object | undefined)
 
   const startTime = Date.now()
 
@@ -382,18 +385,16 @@ export async function authFetch(
 
   const duration = Date.now() - startTime
 
-  if (isDebugEnabled()) {
-    emitResponseLog(
-      "api-call",
-      method,
-      url,
-      response.status,
-      response.statusText,
-      Object.fromEntries(response.headers.entries()),
-      responseBody,
-      duration,
-    )
-  }
+  emitResponseLog(
+    "api-call",
+    method,
+    url,
+    response.status,
+    response.statusText,
+    Object.fromEntries(response.headers.entries()),
+    responseBody,
+    duration,
+  )
 
   const debugInfo: ApiDebugInfo = {
     url,
@@ -407,7 +408,7 @@ export async function authFetch(
     duration,
   }
 
-  if (isDebugEnabled()) {
+  if (debugEnabled) {
     console.log(formatApiDebug(debugInfo))
   }
 
@@ -423,9 +424,7 @@ export async function authFetch(
     headers.set("Authorization", `Bearer ${newToken}`)
     const retryHeadersObj = Object.fromEntries(headers.entries())
 
-    if (isDebugEnabled()) {
-      emitRequestLog("api-call", method, url, retryHeadersObj, logBody as string | object | undefined)
-    }
+    emitRequestLog("api-call", method, url, retryHeadersObj, logBody as string | object | undefined)
 
     const retryStartTime = Date.now()
 
@@ -439,18 +438,16 @@ export async function authFetch(
 
     const retryDuration = Date.now() - retryStartTime
 
-    if (isDebugEnabled()) {
-      emitResponseLog(
-        "api-call",
-        method,
-        url,
-        retryResponse.status,
-        retryResponse.statusText,
-        Object.fromEntries(retryResponse.headers.entries()),
-        retryBody,
-        retryDuration,
-      )
-    }
+    emitResponseLog(
+      "api-call",
+      method,
+      url,
+      retryResponse.status,
+      retryResponse.statusText,
+      Object.fromEntries(retryResponse.headers.entries()),
+      retryBody,
+      retryDuration,
+    )
 
     const retryDebugInfo: ApiDebugInfo = {
       url,
@@ -464,7 +461,7 @@ export async function authFetch(
       duration: retryDuration,
     }
 
-    if (isDebugEnabled()) {
+    if (debugEnabled) {
       console.log("[1HEALTH API] Retried after token refresh:")
       console.log(formatApiDebug(retryDebugInfo))
     }
