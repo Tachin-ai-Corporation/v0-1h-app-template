@@ -93,9 +93,7 @@
 import { cookies } from "next/headers"
 import type { ApiDebugInfo } from "./api-debug"
 import { formatApiDebug, isDebugEnabled } from "./api-debug"
-
-// Re-export the type for convenience
-export type { ApiDebugInfo } from "./api-debug"
+import { emitRequestLog, emitResponseLog } from "./debug-log-emitter"
 
 /**
  * Retrieves the 1health base URL from cookies.
@@ -365,6 +363,13 @@ export async function authFetch(
     ? `[FormData with ${Array.from((options.body as FormData).keys()).length} field(s): ${Array.from((options.body as FormData).keys()).join(", ")}]`
     : options.body
 
+  const method = options.method || "GET"
+  const headersObj = Object.fromEntries(headers.entries())
+
+  if (isDebugEnabled()) {
+    emitRequestLog("api-call", method, url, headersObj, logBody as string | object | undefined)
+  }
+
   const startTime = Date.now()
 
   const response = await fetch(url, {
@@ -377,10 +382,23 @@ export async function authFetch(
 
   const duration = Date.now() - startTime
 
+  if (isDebugEnabled()) {
+    emitResponseLog(
+      "api-call",
+      method,
+      url,
+      response.status,
+      response.statusText,
+      Object.fromEntries(response.headers.entries()),
+      responseBody,
+      duration,
+    )
+  }
+
   const debugInfo: ApiDebugInfo = {
     url,
-    method: options.method || "GET",
-    headers: Object.fromEntries(headers.entries()),
+    method,
+    headers: headersObj,
     body: logBody,
     status: response.status,
     statusText: response.statusText,
@@ -403,6 +421,11 @@ export async function authFetch(
 
     // Retry the request with the new token
     headers.set("Authorization", `Bearer ${newToken}`)
+    const retryHeadersObj = Object.fromEntries(headers.entries())
+
+    if (isDebugEnabled()) {
+      emitRequestLog("api-call", method, url, retryHeadersObj, logBody as string | object | undefined)
+    }
 
     const retryStartTime = Date.now()
 
@@ -416,10 +439,23 @@ export async function authFetch(
 
     const retryDuration = Date.now() - retryStartTime
 
+    if (isDebugEnabled()) {
+      emitResponseLog(
+        "api-call",
+        method,
+        url,
+        retryResponse.status,
+        retryResponse.statusText,
+        Object.fromEntries(retryResponse.headers.entries()),
+        retryBody,
+        retryDuration,
+      )
+    }
+
     const retryDebugInfo: ApiDebugInfo = {
       url,
-      method: options.method || "GET",
-      headers: Object.fromEntries(headers.entries()),
+      method,
+      headers: retryHeadersObj,
       body: logBody,
       status: retryResponse.status,
       statusText: retryResponse.statusText,
