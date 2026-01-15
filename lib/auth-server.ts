@@ -85,7 +85,7 @@
  * - DO NOT implement your own token refresh logic - authFetch handles this
  * - DO NOT hardcode 1health URLs - use getOneHealthBaseUrl() instead
  * - If authFetch returns a redirect response, the user's session has expired
- *   and they need to re-authenticate through 1health
+ *   and they need to re-authenticate direclty through 1health
  *
  * =============================================================================
  */
