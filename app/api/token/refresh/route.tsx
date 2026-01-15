@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { emitRequestLog, emitResponseLog, emitInfoLog, emitErrorLog } from "@/lib/debug-log-emitter"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -25,6 +26,8 @@ export async function POST() {
     error?: string
   } = { step: "init" }
 
+  emitInfoLog("token-refresh", "Starting token refresh")
+
   try {
     const cookieStore = await cookies()
     const refreshToken = cookieStore.get("refresh_token")?.value
@@ -38,6 +41,7 @@ export async function POST() {
     if (!refreshToken) {
       debugInfo.step = "no_refresh_token"
       debugInfo.error = "No refresh token found in cookies"
+      emitErrorLog("token-refresh", "No refresh token found in cookies")
       return NextResponse.json(
         {
           error: "No refresh token available",
@@ -55,6 +59,15 @@ export async function POST() {
     debugInfo.requestBody = `grant_type=refresh_token&refresh_token=[TOKEN_LENGTH:${refreshToken.length}]&client_id=public-client`
     debugInfo.step = "making_request"
 
+    emitRequestLog(
+      "token-refresh",
+      "POST",
+      tokenUrl,
+      { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      debugInfo.requestBody,
+    )
+
+    const startTime = Date.now()
     const response = await fetch(tokenUrl, {
       method: "POST",
       headers: {
@@ -63,6 +76,7 @@ export async function POST() {
       },
       body: requestBody,
     })
+    const duration = Date.now() - startTime
 
     debugInfo.responseStatus = response.status
     debugInfo.step = "response_received"
@@ -70,9 +84,21 @@ export async function POST() {
     const responseText = await response.text()
     debugInfo.responseBody = responseText
 
+    emitResponseLog(
+      "token-refresh",
+      "POST",
+      tokenUrl,
+      response.status,
+      response.statusText,
+      Object.fromEntries(response.headers.entries()),
+      responseText.length > 500 ? responseText.substring(0, 500) + "...[TRUNCATED]" : responseText,
+      duration,
+    )
+
     if (!response.ok) {
       debugInfo.step = "response_error"
       debugInfo.error = `1health returned ${response.status}`
+      emitErrorLog("token-refresh", `Token refresh failed: ${response.status}`, { responseBody: responseText })
       return NextResponse.json(
         {
           error: "Failed to refresh token",
@@ -90,6 +116,7 @@ export async function POST() {
     } catch (e) {
       debugInfo.step = "parse_error"
       debugInfo.error = "Failed to parse response as JSON"
+      emitErrorLog("token-refresh", "Failed to parse response as JSON", { responseBody: responseText })
       return NextResponse.json(
         {
           error: "Invalid response from 1health",
@@ -99,6 +126,12 @@ export async function POST() {
         { status: 500 },
       )
     }
+
+    emitInfoLog("token-refresh", "Token refresh successful, updating cookies", {
+      accessTokenLength: data.access_token?.length,
+      refreshTokenLength: data.refresh_token?.length,
+      expiresIn: data.expires_in,
+    })
 
     const res = NextResponse.json({
       success: true,
@@ -146,6 +179,7 @@ export async function POST() {
   } catch (error) {
     debugInfo.step = "exception"
     debugInfo.error = String(error)
+    emitErrorLog("token-refresh", `Exception during refresh: ${String(error)}`)
     return NextResponse.json(
       {
         error: "Internal server error during token refresh",

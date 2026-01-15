@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { createDecipheriv, createHmac } from "crypto"
 import { cookies } from "next/headers"
+import { emitRequestLog, emitResponseLog, emitInfoLog, emitErrorLog } from "@/lib/debug-log-emitter"
 
 interface AuthResponse {
   id: string
@@ -114,6 +115,7 @@ function decryptAesGcm({
 export async function POST(req: Request) {
   try {
     console.log("[v0] POST /api/token - Starting token exchange")
+    emitInfoLog("token-exchange", "Starting LPL decryption and token exchange")
 
     const cookieStore = await cookies()
     const envOneHealthUrl = process.env.NEXT_PUBLIC_1H_URL
@@ -256,6 +258,10 @@ export async function POST(req: Request) {
     const tokenExchangeUrl = `${authUrl}/api/v2/public/external-application/auth/oauth2/user/token`
     console.log("[v0] Exchanging one-time code for tokens at:", tokenExchangeUrl)
 
+    const requestPayload = { signature: "[REDACTED]", securityCode: `${securityCode.substring(0, 8)}...[REDACTED]` }
+    emitRequestLog("token-exchange", "POST", tokenExchangeUrl, { "Content-Type": "application/json" }, requestPayload)
+
+    const startTime = Date.now()
     let authRes: Response
     try {
       authRes = await fetch(tokenExchangeUrl, {
@@ -266,6 +272,7 @@ export async function POST(req: Request) {
       console.log("[v0] Token exchange response status:", authRes.status, authRes.statusText)
     } catch (err) {
       console.error("[v0] Failed to connect to 1health for token exchange:", err)
+      emitErrorLog("token-exchange", `Failed to connect to 1health: ${String(err)}`)
       return NextResponse.json(
         {
           error: "Failed to connect to 1health authentication service",
@@ -275,7 +282,26 @@ export async function POST(req: Request) {
       )
     }
 
+    const duration = Date.now() - startTime
     const authData: AuthResponse = await authRes.json()
+
+    const sanitizedResponse = {
+      ...authData,
+      access_token: authData.access_token ? `${authData.access_token.substring(0, 20)}...[REDACTED]` : undefined,
+      refresh_token: authData.refresh_token ? `${authData.refresh_token.substring(0, 20)}...[REDACTED]` : undefined,
+      id_token: authData.id_token ? `${authData.id_token.substring(0, 20)}...[REDACTED]` : undefined,
+    }
+    emitResponseLog(
+      "token-exchange",
+      "POST",
+      tokenExchangeUrl,
+      authRes.status,
+      authRes.statusText,
+      Object.fromEntries(authRes.headers.entries()),
+      sanitizedResponse,
+      duration,
+    )
+
     console.log("[v0] Token exchange response data:", {
       success: authRes.ok,
       hasAccessToken: !!authData.access_token,
@@ -285,6 +311,7 @@ export async function POST(req: Request) {
 
     if (!authRes.ok) {
       console.error("[v0] Token exchange failed:", authData)
+      emitErrorLog("token-exchange", `Token exchange failed: ${authRes.status}`, { response: authData })
       return NextResponse.json(
         {
           error: "Authentication failed",
@@ -391,9 +418,17 @@ export async function POST(req: Request) {
       // Non-fatal - continue with token response
     }
 
+    emitInfoLog("token-exchange", "Token exchange successful, cookies set", {
+      accessTokenLength: authData.access_token?.length,
+      refreshTokenLength: authData.refresh_token?.length,
+      expiresIn: authData.expires_in,
+    })
+
     return NextResponse.json(authData)
   } catch (err: any) {
     console.error("[v0] Unexpected error in /api/token:", err)
+
+    emitErrorLog("token-exchange", `Unexpected error: ${err.message || String(err)}`)
 
     return NextResponse.json(
       {
