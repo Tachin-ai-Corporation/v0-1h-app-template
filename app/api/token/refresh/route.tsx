@@ -1,5 +1,5 @@
 import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { emitRequestLog, emitResponseLog, emitInfoLog, emitErrorLog } from "@/lib/debug-log-emitter"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +15,7 @@ interface TokenResponse {
   id_token?: string
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   const debugInfo: {
     step: string
     baseUrl?: string
@@ -190,9 +190,19 @@ export async function POST() {
   }
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      Allow: "POST, GET, OPTIONS",
+    },
+  })
+}
+
 export async function GET() {
   return NextResponse.json({
     message: "Token refresh endpoint. Use POST to refresh tokens.",
     method: "POST",
+    timestamp: new Date().toISOString(),
   })
 }
