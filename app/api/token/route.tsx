@@ -307,7 +307,18 @@ export async function POST(req: Request) {
       path: "/",
     })
 
-    const refreshExpiresAt = Date.now() + refreshTokenMaxAge * 1000
+    // Set cookies for refresh_token and token_expires_at
+    cookieStore.set("refresh_token", authData.refresh_token, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: refreshTokenMaxAge,
+      path: "/",
+    })
+
+    const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
+    const refreshExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
+
     cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
@@ -316,7 +327,6 @@ export async function POST(req: Request) {
       path: "/",
     })
 
-    const tokenExpiresAt = Date.now() + accessTokenMaxAge * 1000
     cookieStore.set("token_expires_at", String(tokenExpiresAt), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
@@ -325,7 +335,14 @@ export async function POST(req: Request) {
       path: "/",
     })
 
-    console.log("[v0] Tokens set successfully in cookies")
+    console.log("[v0] Tokens set successfully in cookies:", {
+      accessTokenLength: authData.access_token?.length,
+      refreshTokenLength: authData.refresh_token?.length,
+      accessTokenMaxAge,
+      refreshTokenMaxAge,
+      tokenExpiresAt,
+      refreshExpiresAt,
+    })
 
     try {
       const tenantUrl = `${authUrl}/api/v2/tenant`

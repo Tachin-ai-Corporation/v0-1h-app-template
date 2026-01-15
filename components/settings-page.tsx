@@ -73,19 +73,19 @@ function getTokenInfo(tokenName: string): TokenInfo {
 
   const parsed = parseJwt(token)
   if (!parsed?.exp) {
-    // For tokens without exp in JWT, check token_expires_at cookie for access_token
-    if (tokenName === "access_token") {
-      const expiresAtCookie = getCookie("token_expires_at")
-      if (expiresAtCookie) {
-        const expiresAt = Number.parseInt(expiresAtCookie, 10)
-        const now = Date.now()
-        const remaining = expiresAt - now
-        return {
-          expiresAt,
-          isExpired: remaining <= 0,
-          timeRemaining: formatTimeRemaining(remaining),
-          rawToken: token,
-        }
+    // For tokens without exp in JWT, check the corresponding expires_at cookie
+    const expiresAtCookieName = tokenName === "access_token" ? "token_expires_at" : "refresh_token_expires_at"
+    const expiresAtCookie = getCookie(expiresAtCookieName)
+    if (expiresAtCookie) {
+      const expiresAtSeconds = Number.parseInt(expiresAtCookie, 10)
+      const expiresAt = expiresAtSeconds * 1000
+      const now = Date.now()
+      const remaining = expiresAt - now
+      return {
+        expiresAt,
+        isExpired: remaining <= 0,
+        timeRemaining: formatTimeRemaining(remaining),
+        rawToken: token,
       }
     }
     return { expiresAt: null, isExpired: false, timeRemaining: "Unknown", rawToken: token }
