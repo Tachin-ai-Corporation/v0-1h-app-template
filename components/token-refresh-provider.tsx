@@ -40,73 +40,31 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
 
   const refreshToken = useCallback(async (): Promise<boolean> => {
     if (refreshInProgress.current) {
-      console.log("[v0] TokenRefresh - Refresh already in progress, skipping")
       return false
     }
 
     refreshInProgress.current = true
 
-    console.log("=".repeat(60))
-    console.log("[v0] AUTH DEBUG - Token Refresh Started")
-    console.log("=".repeat(60))
-
-    const requestUrl = "/api/token/refresh"
-    console.log("[v0] AUTH DEBUG - Internal API Request:")
-    console.log("  URL:", requestUrl)
-    console.log("  Method: POST")
-    console.log("  Body: {}")
+    console.log("[TokenRefresh] Calling /api/token/refresh")
 
     try {
-      const response = await fetch(requestUrl, {
+      const response = await fetch("/api/token/refresh", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       })
 
-      console.log("[v0] AUTH DEBUG - Internal API Response:")
-      console.log("  Status:", response.status)
-
-      const responseText = await response.text()
-      let responseData: any = null
-
-      try {
-        responseData = JSON.parse(responseText)
-      } catch (e) {
-        console.log("  Body (raw text):", responseText)
-      }
-
-      if (responseData) {
-        console.log("  Body (parsed):", responseData)
-
-        // Log the 1health request/response details if present
-        if (responseData.debug) {
-          console.log("-".repeat(60))
-          console.log("[v0] AUTH DEBUG - 1health OAuth Details:")
-          console.log("  Step:", responseData.debug.step)
-          console.log("  Base URL:", responseData.debug.baseUrl)
-          console.log("  Token URL:", responseData.debug.tokenUrl)
-          console.log("  Request Body:", responseData.debug.requestBody)
-          console.log("  Response Status:", responseData.debug.responseStatus)
-          console.log("  Response Body:", responseData.debug.responseBody)
-          if (responseData.debug.error) {
-            console.log("  Error:", responseData.debug.error)
-          }
-          console.log("-".repeat(60))
-        }
-      }
-
-      console.log("=".repeat(60))
+      const responseData = await response.json().catch(() => null)
 
       if (response.ok && responseData?.success) {
-        console.log("[v0] AUTH DEBUG - Token refresh SUCCESS")
+        console.log("[TokenRefresh] Success")
         return true
       } else {
-        console.error("[v0] AUTH DEBUG - Token refresh FAILED")
+        console.log("[TokenRefresh] Failed:", response.status)
         return false
       }
     } catch (error) {
-      console.error("[v0] AUTH DEBUG - Network error:", error)
-      console.log("=".repeat(60))
+      console.error("[TokenRefresh] Network error:", error)
       return false
     } finally {
       refreshInProgress.current = false
@@ -121,7 +79,6 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
 
     const expiresAt = getTokenExpiresAt()
     if (!expiresAt) {
-      console.log("[v0] TokenRefresh - No expiry timestamp found, skipping check")
       return
     }
 
@@ -129,21 +86,13 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
     const timeUntilExpiry = expiresAt - now
     const fiveMinutes = 5 * 60 * 1000
 
-    console.log(
-      "[v0] TokenRefresh - Check: expiresAt=",
-      new Date(expiresAt).toISOString(),
-      "timeUntilExpiry=",
-      Math.round(timeUntilExpiry / 1000),
-      "seconds",
-    )
-
     // If token expires within 5 minutes, refresh proactively
     if (timeUntilExpiry < fiveMinutes && timeUntilExpiry > 0) {
-      console.log("[v0] TokenRefresh - Token expires soon, refreshing proactively")
+      console.log("[TokenRefresh] Token expires soon, refreshing proactively")
       await refreshToken()
     } else if (timeUntilExpiry <= 0) {
       // Token already expired, try to refresh
-      console.log("[v0] TokenRefresh - Token expired, attempting refresh")
+      console.log("[TokenRefresh] Token expired, attempting refresh")
       await refreshToken()
     }
   }, [refreshToken])
@@ -166,7 +115,6 @@ export function TokenRefreshProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("[v0] TokenRefresh - Tab became visible, checking token")
         checkAndRefresh()
       }
     }

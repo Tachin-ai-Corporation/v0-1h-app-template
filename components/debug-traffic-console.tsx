@@ -36,42 +36,43 @@ export function DebugTrafficConsole() {
       eventSourceRef.current.close()
     }
 
+    console.log("[v0] DebugConsole - Attempting to connect to /api/debug/stream")
     const es = new EventSource("/api/debug/stream")
     eventSourceRef.current = es
 
     es.onopen = () => {
       setIsConnected(true)
-      console.log("[v0] Debug stream connected")
+      console.log("[v0] DebugConsole - SSE stream connected successfully")
     }
 
     es.onmessage = (event) => {
       try {
+        console.log("[v0] DebugConsole - Received SSE message:", event.data.substring(0, 100) + "...")
         const entry: DebugLogEntry = JSON.parse(event.data)
         setLogs((prev) => [...prev.slice(-499), entry]) // Keep last 500 logs
       } catch (e) {
-        console.error("[v0] Failed to parse debug log:", e)
+        console.error("[v0] DebugConsole - Failed to parse debug log:", e)
       }
     }
 
-    es.onerror = () => {
+    es.onerror = (error) => {
       setIsConnected(false)
-      console.log("[v0] Debug stream disconnected, reconnecting...")
+      console.log("[v0] DebugConsole - SSE stream error, reconnecting in 3s...", error)
       setTimeout(connect, 3000)
     }
   }, [])
 
   useEffect(() => {
-    if (isOpen && !eventSourceRef.current) {
-      connect()
-    }
+    connect()
 
     return () => {
       if (eventSourceRef.current) {
+        console.log("[v0] DebugConsole - Closing SSE connection on unmount")
         eventSourceRef.current.close()
         eventSourceRef.current = null
       }
     }
-  }, [isOpen, connect])
+  }, [connect])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -128,11 +129,6 @@ export function DebugTrafficConsole() {
     })
   }
 
-  // Don't render if debug is disabled
-  if (process.env.NEXT_PUBLIC_ENABLE_DEBUG_STREAM !== "true") {
-    return null
-  }
-
   // Floating toggle button when closed
   if (!isOpen) {
     return (
@@ -142,6 +138,11 @@ export function DebugTrafficConsole() {
         title="Open API Traffic Console"
       >
         <Terminal className="h-5 w-5 text-green-400" />
+        {logs.length > 0 && (
+          <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-[10px] flex items-center justify-center">
+            {logs.length > 99 ? "99+" : logs.length}
+          </Badge>
+        )}
       </Button>
     )
   }
