@@ -11,7 +11,12 @@ import type {
   RelationshipSelection,
   QueryRelationshipRequest,
 } from "@/lib/types/query-builder"
-import { fetchTypeDetails, type TypeAttribute, type TypeRelationship } from "@/lib/api/type-metadata"
+import {
+  prefetchTypeDetails,
+  type TypeAttribute,
+  type TypeRelationship,
+  type TypeDefinition,
+} from "@/lib/api/type-metadata"
 
 // Parsed query payload structure (what user pastes)
 export interface ParsedQueryPayload {
@@ -150,19 +155,49 @@ function parseRelationshipKey(key: string): { fromType: string; relKey: string; 
   }
 }
 
-// Recursively build relationship selections from payload
+function collectTypeNamesToFetch(
+  rootType: string,
+  payloadRelationships: QueryRelationshipRequest[] | undefined,
+): string[] {
+  const types = new Set<string>([rootType])
+
+  function collectFromRelationships(relationships: QueryRelationshipRequest[] | undefined) {
+    if (!relationships) return
+    for (const rel of relationships) {
+      // Parse the relationship key to get the target type
+      const parts = rel.key.split(".")
+      if (parts.length === 3) {
+        // Add both types from the relationship key (in case of backward relationships)
+        types.add(parts[0])
+        types.add(parts[2])
+      }
+      // Recursively collect from nested relationships
+      collectFromRelationships(rel.relationships)
+    }
+  }
+
+  collectFromRelationships(payloadRelationships)
+  return Array.from(types)
+}
+
 async function buildRelationshipSelections(
   payloadRelationships: QueryRelationshipRequest[] | undefined,
   availableRelationships: TypeRelationship[],
   fromType: string,
-): Promise<RelationshipSelection[]> {
-  const result: RelationshipSelection[] = []
+  prefetchedTypes: Map<string, TypeDefinition>,
+): Promise<{ forward: RelationshipSelection[]; backward: RelationshipSelection[] }> {
+  const forward: RelationshipSelection[] = []
+  const backward: RelationshipSelection[] = []
 
-  // First, create selections for ALL available relationships (not just enabled ones)
   for (const rel of availableRelationships) {
-    const targetTypeKey = rel.toBoClassName.replace(/\s+/g, "")
+    const isForward = rel.direction === "FORWARD"
+    const targetTypeRaw = isForward ? rel.toBoClassName : rel.fromBoClassName
+    const targetTypeKey = targetTypeRaw.replace(/\s+/g, "")
     const fromTypeKey = fromType.replace(/\s+/g, "")
-    const queryPath = `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
+
+    const queryPath = isForward
+      ? `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
+      : `${targetTypeKey}.${rel.relKey}.${fromTypeKey}`
 
     // Check if this relationship is in the payload (enabled)
     const payloadRel = payloadRelationships?.find((pr) => pr.key === queryPath)
@@ -172,7 +207,7 @@ async function buildRelationshipSelections(
       relationshipKey: queryPath,
       relationshipName: rel.name,
       targetType: targetTypeKey,
-      targetTypeLabel: rel.toBoClassName,
+      targetTypeLabel: targetTypeRaw,
       direction: rel.direction,
       enabled: !!payloadRel,
       limit: payloadRel?.limit || 10,
@@ -180,31 +215,33 @@ async function buildRelationshipSelections(
       nestedRelationships: [],
     }
 
-    // If enabled, fetch target type details and populate attributes/nested relationships
+    // If enabled, use prefetched data instead of fetching
     if (payloadRel) {
-      const targetTypeResult = await fetchTypeDetails(targetTypeKey)
+      const targetTypeData = prefetchedTypes.get(targetTypeKey)
 
-      if (targetTypeResult.success && targetTypeResult.data) {
+      if (targetTypeData) {
         const filterMap = parseFilterString(payloadRel.filter || "")
-        selection.attributes = mapAttributesToSelections(
-          targetTypeResult.data.attributes,
-          payloadRel.attributes,
-          filterMap,
-        )
+        selection.attributes = mapAttributesToSelections(targetTypeData.attributes, payloadRel.attributes, filterMap)
 
-        // Recursively build nested relationships
-        selection.nestedRelationships = await buildRelationshipSelections(
+        // Recursively build nested relationships using prefetched data
+        const nestedResult = await buildRelationshipSelections(
           payloadRel.relationships,
-          targetTypeResult.data.relationships,
+          targetTypeData.relationships,
           targetTypeKey,
+          prefetchedTypes,
         )
+        selection.nestedRelationships = [...nestedResult.forward, ...nestedResult.backward]
       }
     }
 
-    result.push(selection)
+    if (isForward) {
+      forward.push(selection)
+    } else {
+      backward.push(selection)
+    }
   }
 
-  return result
+  return { forward, backward }
 }
 
 // Main parser function - converts a query payload into QueryBuilderState
@@ -214,13 +251,14 @@ export async function parseQueryPayload(
   try {
     const rootType = payload.key
 
-    // Fetch root type details
-    const rootTypeResult = await fetchTypeDetails(rootType)
-    if (!rootTypeResult.success || !rootTypeResult.data) {
-      return { success: false, error: rootTypeResult.error || `Failed to fetch type details for ${rootType}` }
-    }
+    const typesToFetch = collectTypeNamesToFetch(rootType, payload.relationships)
+    const prefetchedTypes = await prefetchTypeDetails(typesToFetch)
 
-    const rootTypeData = rootTypeResult.data
+    // Get root type from prefetched data
+    const rootTypeData = prefetchedTypes.get(rootType)
+    if (!rootTypeData) {
+      return { success: false, error: `Failed to fetch type details for ${rootType}` }
+    }
 
     // Parse root filters
     const filterMap = parseFilterString(payload.filter || "")
@@ -228,14 +266,19 @@ export async function parseQueryPayload(
     // Build attribute selections
     const attributes = mapAttributesToSelections(rootTypeData.attributes, payload.attributes, filterMap)
 
-    // Build relationship selections recursively
-    const relationships = await buildRelationshipSelections(payload.relationships, rootTypeData.relationships, rootType)
+    const { forward: relationships, backward: backwardRelationships } = await buildRelationshipSelections(
+      payload.relationships,
+      rootTypeData.relationships,
+      rootType,
+      prefetchedTypes,
+    )
 
     const state: QueryBuilderState = {
       rootType,
       rootTypeLabel: rootTypeData.name,
       attributes,
       relationships,
+      backwardRelationships,
       limit: payload.limit || 10,
       offset: payload.offset || 0,
       isLoading: false,
