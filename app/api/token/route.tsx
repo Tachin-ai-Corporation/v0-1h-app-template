@@ -297,7 +297,7 @@ export async function POST(req: Request) {
 
     // Set cookies for access_token and refresh_token
     const accessTokenMaxAge = authData.expires_in
-    const refreshTokenMaxAge = authData.refresh_token_expires_in || 60 * 60 * 24 * 7
+    const refreshTokenMaxAge = accessTokenMaxAge * 2
 
     cookieStore.set("access_token", authData.access_token, {
       httpOnly: false,
@@ -307,7 +307,8 @@ export async function POST(req: Request) {
       path: "/",
     })
 
-    cookieStore.set("refresh_token", authData.refresh_token, {
+    const refreshExpiresAt = Date.now() + refreshTokenMaxAge * 1000
+    cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -317,15 +318,6 @@ export async function POST(req: Request) {
 
     const tokenExpiresAt = Date.now() + accessTokenMaxAge * 1000
     cookieStore.set("token_expires_at", String(tokenExpiresAt), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: refreshTokenMaxAge,
-      path: "/",
-    })
-
-    const refreshExpiresAt = Date.now() + refreshTokenMaxAge * 1000
-    cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

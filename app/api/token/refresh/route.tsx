@@ -106,11 +106,9 @@ export async function POST() {
     })
 
     const accessTokenMaxAge = data.expires_in || 3600
-    const refreshTokenMaxAge = 7 * 24 * 60 * 60 // 7 days
+    const refreshTokenMaxAge = accessTokenMaxAge * 2
     const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
-    const refreshTokenExpiresAt = data.refresh_token_expires_in
-      ? Math.floor(Date.now() / 1000) + data.refresh_token_expires_in
-      : Math.floor(Date.now() / 1000) + refreshTokenMaxAge
+    const refreshTokenExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
 
     res.cookies.set("access_token", data.access_token, {
       httpOnly: false,
