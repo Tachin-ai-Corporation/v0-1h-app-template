@@ -22,7 +22,7 @@
  * management and automatic refresh handling.
  *
  * EXAMPLE - Client Component:
- * ```typescript
+ * \`\`\`typescript
  * "use client"
  * import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
  *
@@ -34,7 +34,7 @@
  *   })
  *   return response.json()
  * }
- * ```
+ * \`\`\`
  *
  * =============================================================================
  */
@@ -156,9 +156,22 @@ interface ApiDebugInfo {
 
 /**
  * Formats and logs API request/response to console
+ * Headers and body are logged as formatted JSON strings for easy copying
  */
 function logApiCall(type: "request" | "response", info: ApiDebugInfo): void {
   const timestamp = new Date().toLocaleTimeString()
+
+  const headersStr = JSON.stringify(info.headers, null, 2)
+
+  let bodyStr: string | undefined
+  if (info.body) {
+    try {
+      const parsed = typeof info.body === "string" ? JSON.parse(info.body) : info.body
+      bodyStr = JSON.stringify(parsed, null, 2)
+    } catch {
+      bodyStr = String(info.body)
+    }
+  }
 
   if (type === "request") {
     console.groupCollapsed(
@@ -168,14 +181,9 @@ function logApiCall(type: "request" | "response", info: ApiDebugInfo): void {
       "color: #4CAF50; font-weight: bold",
       "color: #2196F3",
     )
-    console.log("Headers:", info.headers)
-    if (info.body) {
-      try {
-        const parsed = typeof info.body === "string" ? JSON.parse(info.body) : info.body
-        console.log("Body:", parsed)
-      } catch {
-        console.log("Body:", info.body)
-      }
+    console.log("Headers:\n" + headersStr)
+    if (bodyStr) {
+      console.log("Body:\n" + bodyStr)
     }
     console.groupEnd()
   } else {
@@ -191,13 +199,16 @@ function logApiCall(type: "request" | "response", info: ApiDebugInfo): void {
     )
     console.log("Status:", info.status, info.statusText)
     console.log("Duration:", `${info.duration}ms`)
+    console.log("Headers:\n" + headersStr)
     if (info.responseBody) {
+      let responseStr: string
       try {
         const parsed = JSON.parse(info.responseBody)
-        console.log("Response:", parsed)
+        responseStr = JSON.stringify(parsed, null, 2)
       } catch {
-        console.log("Response:", info.responseBody)
+        responseStr = info.responseBody
       }
+      console.log("Response:\n" + responseStr)
     }
     console.groupEnd()
   }
@@ -252,7 +263,7 @@ export async function refreshToken(): Promise<boolean> {
         "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
       },
-      body: `grant_type=refresh_token&refresh_token=[REDACTED]&client_id=public-client`,
+      body: requestBody,
     }
 
     logApiCall("request", debugInfo)
@@ -381,12 +392,6 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   const method = options.method || "GET"
   const headersObj = Object.fromEntries(headers.entries())
 
-  // Prepare body for logging (redact Authorization header)
-  const logHeaders = { ...headersObj }
-  if (logHeaders.Authorization) {
-    logHeaders.Authorization = "Bearer [REDACTED]"
-  }
-
   const logBody = isFormData
     ? `[FormData with ${Array.from((options.body as FormData).keys()).length} field(s)]`
     : options.body
@@ -395,7 +400,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   logApiCall("request", {
     url,
     method,
-    headers: logHeaders,
+    headers: headersObj,
     body: logBody as string | undefined,
   })
 
@@ -422,7 +427,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   logApiCall("response", {
     url,
     method,
-    headers: logHeaders,
+    headers: headersObj,
     status: response.status,
     statusText: response.statusText,
     responseBody,
@@ -448,14 +453,12 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
     console.log("[auth-client] Retrying request with new token...")
 
-    // Log retry request
-    const retryLogHeaders = { ...Object.fromEntries(headers.entries()) }
-    retryLogHeaders.Authorization = "Bearer [REDACTED]"
+    const retryHeaders = Object.fromEntries(headers.entries())
 
     logApiCall("request", {
       url,
       method,
-      headers: retryLogHeaders,
+      headers: retryHeaders,
       body: logBody as string | undefined,
     })
 
@@ -480,7 +483,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     logApiCall("response", {
       url,
       method,
-      headers: retryLogHeaders,
+      headers: retryHeaders,
       status: retryResponse.status,
       statusText: retryResponse.statusText,
       responseBody: retryBody,
