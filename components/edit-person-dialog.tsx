@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import type { PatientInfo } from "@/app/actions/person-actions"
-import { upsertPerson, type UpsertPersonPayload } from "@/app/actions/person-actions"
-import type { ExternalSystemId } from "@/app/actions/query"
+import type { PatientInfo } from "@/lib/api/person"
+import { upsertPerson, type UpsertPersonPayload } from "@/lib/api/person"
+import type { ExternalSystemId } from "@/lib/api/query-person"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 
@@ -21,31 +21,22 @@ interface EditPersonDialogProps {
   onSuccess: (updatedInfo: PatientInfo) => void
 }
 
-// Format phone number as user types: (XXX) XXX-XXXX
 function formatPhoneNumber(value: string): string {
-  // Remove all non-digit characters
   let digits = value.replace(/\D/g, "")
-
-  // If it starts with country code "1" and has 11 digits, strip the leading "1"
   if (digits.length === 11 && digits.startsWith("1")) {
     digits = digits.slice(1)
   }
-
-  // Take only the first 10 digits
   digits = digits.slice(0, 10)
-
   if (digits.length === 0) return ""
   if (digits.length <= 3) return `(${digits}`
   if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
 }
 
-// Parse phone to digits only
 function parsePhoneDigits(phone: string): string {
   return phone.replace(/\D/g, "")
 }
 
-// Format date for display in input: YYYY-MM-DD
 function formatDateForInput(dateStr: string | undefined): string {
   if (!dateStr) return ""
   try {
@@ -57,35 +48,30 @@ function formatDateForInput(dateStr: string | undefined): string {
   }
 }
 
-// Validate date is not in future and is reasonable
 function isValidDate(dateStr: string): boolean {
-  if (!dateStr) return true // Optional field
+  if (!dateStr) return true
   const date = new Date(dateStr)
   if (isNaN(date.getTime())) return false
   const now = new Date()
   if (date > now) return false
-  // Check if date is not more than 150 years ago
   const minDate = new Date()
   minDate.setFullYear(minDate.getFullYear() - 150)
   if (date < minDate) return false
   return true
 }
 
-// Validate email format
 function isValidEmail(email: string): boolean {
-  if (!email) return true // Optional field
+  if (!email) return true
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
 }
 
-// Validate phone has 10 digits
 function isValidPhone(phone: string): boolean {
-  if (!phone) return true // Optional field
+  if (!phone) return true
   const digits = parsePhoneDigits(phone)
   return digits.length === 10
 }
 
-// US States for dropdown
 const US_STATES = [
   { value: "AL", label: "Alabama" },
   { value: "AK", label: "Alaska" },
@@ -155,7 +141,6 @@ export function EditPersonDialog({
   const { toast } = useToast()
   const [saving, setSaving] = useState(false)
 
-  // Form state
   const [firstName, setFirstName] = useState(patientInfo.firstName || "")
   const [lastName, setLastName] = useState(patientInfo.lastName || "")
   const [middleName, setMiddleName] = useState(patientInfo.middleName || "")
@@ -172,7 +157,6 @@ export function EditPersonDialog({
   const [newSystemName, setNewSystemName] = useState("")
   const [newSystemId, setNewSystemId] = useState("")
 
-  // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -199,21 +183,17 @@ export function EditPersonDialog({
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
-
     if (!firstName.trim()) newErrors.firstName = "First name is required"
     if (!lastName.trim()) newErrors.lastName = "Last name is required"
     if (!isValidDate(dateOfBirth)) newErrors.dateOfBirth = "Invalid date of birth"
     if (!isValidEmail(email)) newErrors.email = "Invalid email format"
     if (!isValidPhone(phone)) newErrors.phone = "Phone must be 10 digits"
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleAddExternalId = () => {
     if (!newSystemName.trim() || !newSystemId.trim()) return
-
-    // Check for duplicate system name
     if (editableExternalIds.some((id) => id.systemName === newSystemName.trim())) {
       toast({
         title: "Duplicate System",
@@ -222,7 +202,6 @@ export function EditPersonDialog({
       })
       return
     }
-
     setEditableExternalIds([
       ...editableExternalIds,
       { systemName: newSystemName.trim(), externalId: newSystemId.trim() },
@@ -250,9 +229,7 @@ export function EditPersonDialog({
 
     let addLocation: UpsertPersonPayload["addLocation"] = undefined
     if (street || city || state || zipCode) {
-      addLocation = {
-        primary: true,
-      }
+      addLocation = { primary: true }
       if (street.trim()) addLocation.addressLine1 = street.trim()
       if (city.trim()) addLocation.cityName = city.trim()
       if (state) addLocation.stateName = state
@@ -267,29 +244,18 @@ export function EditPersonDialog({
       birthDate: dateOfBirth,
       biologicalGender: gender,
       email: email.trim() || undefined,
-      phoneNumber: phoneDigits
-        ? {
-            region: "us",
-            value: `+1${phoneDigits}`,
-          }
-        : undefined,
+      phoneNumber: phoneDigits ? { region: "us", value: `+1${phoneDigits}` } : undefined,
       addLocation,
     }
 
     const result = await upsertPerson(payload, patientInfo)
 
-    // For each new or modified external ID, make a separate upsert call
     for (const extId of editableExternalIds) {
       const originalExtId = externalSystemIds.find((e) => e.systemName === extId.systemName)
-
-      // Only update if new or changed
       if (!originalExtId || originalExtId.externalId !== extId.externalId) {
         const extPayload: UpsertPersonPayload = {
           id: patientInfo.id,
-          markWithExternalSystemRecord: {
-            name: extId.systemName,
-            recordId: extId.externalId,
-          },
+          markWithExternalSystemRecord: { name: extId.systemName, recordId: extId.externalId },
         }
         await upsertPerson(extPayload)
       }
@@ -298,13 +264,7 @@ export function EditPersonDialog({
     setSaving(false)
 
     if (result.success) {
-      toast({
-        title: "Success",
-        description: "Patient information updated successfully",
-        duration: 3000,
-      })
-
-      // Build updated patient info
+      toast({ title: "Success", description: "Patient information updated successfully", duration: 3000 })
       const updatedInfo: PatientInfo = {
         ...patientInfo,
         firstName: firstName.trim(),
@@ -325,7 +285,6 @@ export function EditPersonDialog({
               }
             : undefined,
       }
-
       onSuccess(updatedInfo)
       onOpenChange(false)
     } else {
@@ -351,7 +310,6 @@ export function EditPersonDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Name Fields */}
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-2">
               <Label htmlFor="firstName">
@@ -388,7 +346,6 @@ export function EditPersonDialog({
             </div>
           </div>
 
-          {/* DOB and Gender */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="dateOfBirth">Date of Birth</Label>
@@ -418,7 +375,6 @@ export function EditPersonDialog({
             </div>
           </div>
 
-          {/* Contact Info */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="phone">Phone</Label>
@@ -446,7 +402,6 @@ export function EditPersonDialog({
             </div>
           </div>
 
-          {/* Address */}
           <div className="space-y-3">
             <Label>Address</Label>
             <Input
@@ -480,8 +435,6 @@ export function EditPersonDialog({
 
           <div className="space-y-3">
             <Label>External System IDs</Label>
-
-            {/* Existing external IDs */}
             {editableExternalIds.map((extId, index) => (
               <div key={extId.systemName} className="flex items-center gap-2">
                 <div className="flex-1 grid grid-cols-2 gap-2">
@@ -504,8 +457,6 @@ export function EditPersonDialog({
                 </Button>
               </div>
             ))}
-
-            {/* Add new external ID */}
             <div className="flex items-center gap-2">
               <div className="flex-1 grid grid-cols-2 gap-2">
                 <Input

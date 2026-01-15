@@ -11,7 +11,7 @@ import type {
   RelationshipSelection,
   QueryRelationshipRequest,
 } from "@/lib/types/query-builder"
-import { fetchTypeDetails, type TypeAttribute, type TypeRelationship } from "@/app/actions/type-actions"
+import { fetchTypeDetails, type TypeAttribute, type TypeRelationship } from "@/lib/api/type-metadata"
 
 // Parsed query payload structure (what user pastes)
 export interface ParsedQueryPayload {
@@ -24,9 +24,9 @@ export interface ParsedQueryPayload {
 }
 
 const BASELINE_ATTRIBUTES: TypeAttribute[] = [
-  { attrKey: "id", name: "ID", type: "STRING", attributeValues: [] },
-  { attrKey: "created", name: "Created", type: "TIMESTAMP", attributeValues: [] },
-  { attrKey: "updated", name: "Updated", type: "TIMESTAMP", attributeValues: [] },
+  { id: 0, attrKey: "id", name: "ID", type: "STRING", attributeValues: [] },
+  { id: 0, attrKey: "created", name: "Created", type: "TIMESTAMP", attributeValues: [] },
+  { id: 0, attrKey: "updated", name: "Updated", type: "TIMESTAMP", attributeValues: [] },
 ]
 
 // Parse RSQL filter string into attribute filters
@@ -173,6 +173,7 @@ async function buildRelationshipSelections(
       relationshipName: rel.name,
       targetType: targetTypeKey,
       targetTypeLabel: rel.toBoClassName,
+      direction: rel.direction,
       enabled: !!payloadRel,
       limit: payloadRel?.limit || 10,
       attributes: [],

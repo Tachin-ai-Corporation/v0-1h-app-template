@@ -1,15 +1,12 @@
 /**
- * Journey Grid Actions
+ * Client-side Journey Grid API
  *
- * URL Pattern: /api/v3/health/grid/journey
- * Purpose: Fetch and query journey grid data for any campaign
+ * Replaces: app/actions/journey-grid-actions.ts
  */
 
-"use server"
-
+import { authFetch, getOneHealthBaseUrl, setWorkflowOwnerTenantIdCookie } from "@/lib/auth-client"
 import type { JourneyGridResponse, OrderByCondition, FilterByCondition } from "@/lib/api/types"
 import { API_CONFIG } from "@/lib/api/config"
-import { authFetch, getOneHealthBaseUrl, setWorkflowOwnerTenantIdCookie, type ApiDebugInfo } from "@/lib/auth-server"
 
 const COLUMN_TO_FILTER_KEY_MAP: Record<string, string> = {
   myOrganizationUserAssignments: "myOrganizationUserAssignmentName",
@@ -30,31 +27,21 @@ async function callJourneyAPI(
   orderBy: OrderByCondition[] = [],
   columnFilters: Record<string, string> = {},
   columnTypes: Record<string, string> = {},
-): Promise<{ data: JourneyGridResponse; debugInfo: ApiDebugInfo }> {
-  const baseUrl = await getOneHealthBaseUrl()
+): Promise<JourneyGridResponse> {
+  const baseUrl = getOneHealthBaseUrl()
   const url = `${baseUrl}${API_CONFIG.endpoints.journeyGrid}?page=${page}&limit=${limit}&size=${limit}`
 
   const filterBy: FilterByCondition[] = [
-    {
-      key: "workflowCampaignId",
-      value: campaignId,
-      operator: "equals",
-    },
+    { key: "workflowCampaignId", value: campaignId, operator: "equals" },
     ...additionalFilters,
   ]
 
   Object.entries(columnFilters).forEach(([key, value]) => {
-    if (!value || value === "__ALL__" || value.trim() === "") {
-      return
-    }
+    if (!value || value === "__ALL__" || value.trim() === "") return
 
     if (value === "__NONE__") {
       const filterKey = COLUMN_TO_FILTER_KEY_MAP[key] || key
-      filterBy.push({
-        key: filterKey,
-        value: "__IMPOSSIBLE_VALUE_THAT_MATCHES_NOTHING__",
-        operator: "equals",
-      })
+      filterBy.push({ key: filterKey, value: "__IMPOSSIBLE_VALUE_THAT_MATCHES_NOTHING__", operator: "equals" })
       return
     }
 
@@ -74,18 +61,13 @@ async function callJourneyAPI(
 
       if (decodedValues.length === 1) {
         const filterKey = COLUMN_TO_FILTER_KEY_MAP[key] || key
-        filterBy.push({
-          key: filterKey,
-          value: decodedValues[0],
-          operator: "contains",
-        })
+        filterBy.push({ key: filterKey, value: decodedValues[0], operator: "contains" })
       }
       return
     } else if (columnType === "date") {
       const [dateOp, dates] = value.split(":")
       if (dateOp && dates) {
         const filterKey = COLUMN_TO_FILTER_KEY_MAP[key] || key
-
         const operatorMap: Record<string, string> = {
           before: "lessThan",
           after: "greaterThan",
@@ -95,24 +77,12 @@ async function callJourneyAPI(
         if (dateOp === "between") {
           const [startDate, endDate] = dates.split(",")
           if (startDate && endDate) {
-            filterBy.push({
-              key: filterKey,
-              value: startDate.trim(),
-              operator: "greaterThan",
-            })
-            filterBy.push({
-              key: filterKey,
-              value: endDate.trim(),
-              operator: "lessThan",
-            })
+            filterBy.push({ key: filterKey, value: startDate.trim(), operator: "greaterThan" })
+            filterBy.push({ key: filterKey, value: endDate.trim(), operator: "lessThan" })
           }
         } else {
           const apiOperator = operatorMap[dateOp] || "equals"
-          filterBy.push({
-            key: filterKey,
-            value: dates.trim(),
-            operator: apiOperator,
-          })
+          filterBy.push({ key: filterKey, value: dates.trim(), operator: apiOperator })
         }
         return
       } else {
@@ -127,11 +97,7 @@ async function callJourneyAPI(
         if (values.length > 1) {
           const filterKey = COLUMN_TO_FILTER_KEY_MAP[key] || key
           const inValue = `(${values.join(",")})`
-          filterBy.push({
-            key: filterKey,
-            value: inValue,
-            operator: "in",
-          })
+          filterBy.push({ key: filterKey, value: inValue, operator: "in" })
           return
         }
       }
@@ -139,15 +105,10 @@ async function callJourneyAPI(
     }
 
     const filterKey = COLUMN_TO_FILTER_KEY_MAP[key] || key
-
-    filterBy.push({
-      key: filterKey,
-      value: filterValue,
-      operator: operator,
-    })
+    filterBy.push({ key: filterKey, value: filterValue, operator })
   })
 
-  const { response, debugInfo } = await authFetch(url, {
+  const response = await authFetch(url, {
     method: "POST",
     body: JSON.stringify({
       filterBy,
@@ -165,10 +126,10 @@ async function callJourneyAPI(
 
   if (data.data && data.data.length > 0 && data.data[0].templateOwnerOrganizationTenantId) {
     const tenantId = data.data[0].templateOwnerOrganizationTenantId
-    await setWorkflowOwnerTenantIdCookie(tenantId)
+    setWorkflowOwnerTenantIdCookie(tenantId)
   }
 
-  return { data, debugInfo }
+  return data
 }
 
 export interface FetchJourneyGridParams {
@@ -188,13 +149,8 @@ export interface FetchJourneyGridResult {
   totalElements: number
   totalPages: number
   error?: string
-  apiCalls?: ApiDebugInfo[]
 }
 
-/**
- * Fetch journey grid data for any campaign
- * This is the primary function for retrieving campaign journey data
- */
 export async function fetchJourneyGrid(params: FetchJourneyGridParams): Promise<FetchJourneyGridResult> {
   try {
     const {
@@ -209,35 +165,20 @@ export async function fetchJourneyGrid(params: FetchJourneyGridParams): Promise<
     } = params
 
     if (!campaignId) {
-      return {
-        success: false,
-        error: "Campaign ID is required",
-        data: [],
-        totalElements: 0,
-        totalPages: 0,
-      }
+      return { success: false, error: "Campaign ID is required", data: [], totalElements: 0, totalPages: 0 }
     }
 
     const orderBy: OrderByCondition[] = sortColumn
       ? [{ key: sortColumn, order: sortDirection.toUpperCase() as "ASC" | "DESC" }]
       : [{ key: "updated", order: "DESC" }]
 
-    const { data: response, debugInfo } = await callJourneyAPI(
-      campaignId,
-      page,
-      pageSize,
-      additionalFilters,
-      orderBy,
-      filters,
-      columnTypes,
-    )
+    const response = await callJourneyAPI(campaignId, page, pageSize, additionalFilters, orderBy, filters, columnTypes)
 
     return {
       success: true,
       data: response.data,
       totalElements: response.totalElements,
       totalPages: response.totalPages,
-      apiCalls: [debugInfo],
     }
   } catch (error) {
     console.error("Error fetching journey grid data:", error)
@@ -251,45 +192,23 @@ export async function fetchJourneyGrid(params: FetchJourneyGridParams): Promise<
   }
 }
 
-/**
- * Fetch a single journey by member ID and campaign ID
- */
 export async function fetchJourneyByMemberAndCampaign(
   memberId: string,
   campaignId: string,
-): Promise<{
-  success: boolean
-  data?: any
-  error?: string
-}> {
+): Promise<{ success: boolean; data?: any; error?: string }> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
+    const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}${API_CONFIG.endpoints.journeyGrid}?page=0&limit=1&size=1`
 
     const filterBy: FilterByCondition[] = [
-      {
-        key: "workflowCampaignId",
-        value: campaignId,
-        operator: "equals",
-      },
-      {
-        key: "status",
-        value: "In Progress",
-        operator: "equals",
-      },
-      {
-        key: "memberId",
-        value: Number.parseInt(memberId, 10),
-        operator: "equals",
-      },
+      { key: "workflowCampaignId", value: campaignId, operator: "equals" },
+      { key: "status", value: "In Progress", operator: "equals" },
+      { key: "memberId", value: Number.parseInt(memberId, 10), operator: "equals" },
     ]
 
-    const { response } = await authFetch(url, {
+    const response = await authFetch(url, {
       method: "POST",
-      body: JSON.stringify({
-        filterBy,
-        orderBy: [],
-      }),
+      body: JSON.stringify({ filterBy, orderBy: [] }),
     })
 
     if (!response.ok) {
@@ -299,54 +218,29 @@ export async function fetchJourneyByMemberAndCampaign(
     }
 
     const data = await response.json()
-
-    return {
-      success: true,
-      data: data.data && data.data.length > 0 ? data.data[0] : null,
-    }
+    return { success: true, data: data.data && data.data.length > 0 ? data.data[0] : null }
   } catch (error) {
     console.error("Error fetching journey by member and campaign:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch journey data",
-    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to fetch journey data" }
   }
 }
 
-/**
- * Fetch all journeys for a member within a specific campaign
- */
 export async function fetchJourneysByCampaign(
   memberId: string,
   campaignId: string,
-): Promise<{
-  success: boolean
-  data?: any[]
-  error?: string
-}> {
+): Promise<{ success: boolean; data?: any[]; error?: string }> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
+    const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}${API_CONFIG.endpoints.journeyGrid}?page=0&limit=100&size=100`
 
     const filterBy: FilterByCondition[] = [
-      {
-        key: "workflowCampaignId",
-        value: campaignId,
-        operator: "equals",
-      },
-      {
-        key: "memberId",
-        value: Number.parseInt(memberId, 10),
-        operator: "equals",
-      },
+      { key: "workflowCampaignId", value: campaignId, operator: "equals" },
+      { key: "memberId", value: Number.parseInt(memberId, 10), operator: "equals" },
     ]
 
-    const { response } = await authFetch(url, {
+    const response = await authFetch(url, {
       method: "POST",
-      body: JSON.stringify({
-        filterBy,
-        orderBy: [{ key: "updated", order: "DESC" }],
-      }),
+      body: JSON.stringify({ filterBy, orderBy: [{ key: "updated", order: "DESC" }] }),
     })
 
     if (!response.ok) {
@@ -356,19 +250,11 @@ export async function fetchJourneysByCampaign(
     }
 
     const data = await response.json()
-
-    return {
-      success: true,
-      data: data.data || [],
-    }
+    return { success: true, data: data.data || [] }
   } catch (error) {
     console.error("Error fetching journeys by campaign:", error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch journey data",
-    }
+    return { success: false, error: error instanceof Error ? error.message : "Failed to fetch journey data" }
   }
 }
 
-// Backwards compatibility alias
 export const fetchGridData = fetchJourneyGrid

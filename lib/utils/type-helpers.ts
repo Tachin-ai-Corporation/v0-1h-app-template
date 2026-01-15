@@ -7,7 +7,7 @@
  * These are NOT server actions - they can be imported by client components.
  */
 
-import type { TypeRelationship } from "@/app/actions/type-actions"
+import type { TypeRelationship } from "@/lib/api/type-metadata"
 
 /**
  * Helper to get the target type boKey for a relationship.

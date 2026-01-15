@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Loader2, User, Calendar, Phone, Mail } from "lucide-react"
-import { searchPatients, type PatientSearchResult } from "@/app/actions/patient-search-actions"
+import { searchPatients, type PatientSearchResult } from "@/lib/api/patient-search"
 import { useNavigation } from "@/contexts/navigation-context"
 import { formatDate } from "@/lib/utils/date-formatter"
 
@@ -28,7 +28,6 @@ export function PatientSearchPage() {
   const [hasSearched, setHasSearched] = useState(false)
 
   const handleSearch = useCallback(async () => {
-    // Validate at least one field is filled
     if (!firstName && !lastName && !dateOfBirth && !externalId) {
       setError("Please enter at least one search criteria")
       return

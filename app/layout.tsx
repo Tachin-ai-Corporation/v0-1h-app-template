@@ -5,8 +5,6 @@ import "./globals.css"
 import { ToasterWrapper } from "@/components/toaster-wrapper"
 import { ThemeProvider } from "@/components/theme-provider"
 import { NavigationProvider } from "@/contexts/navigation-context"
-import { TokenRefreshProvider } from "@/components/token-refresh-provider"
-import { DebugTrafficConsole } from "@/components/debug-traffic-console"
 
 export const metadata: Metadata = {
   title: "1health App Template",
@@ -38,15 +36,12 @@ export default function RootLayout({
           }
         `}</style>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <TokenRefreshProvider>
-            <NavigationProvider>
-              <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
-                {children}
-              </Suspense>
-              <ToasterWrapper />
-              <DebugTrafficConsole />
-            </NavigationProvider>
-          </TokenRefreshProvider>
+          <NavigationProvider>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+              {children}
+            </Suspense>
+            <ToasterWrapper />
+          </NavigationProvider>
         </ThemeProvider>
       </body>
     </html>

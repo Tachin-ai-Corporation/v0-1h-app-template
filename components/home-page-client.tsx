@@ -9,7 +9,7 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { useNavigation } from "@/contexts/navigation-context"
 import { AuthExitDialog } from "@/components/auth-exit-dialog"
 import { SettingsPage } from "@/components/settings-page"
-import { isSystemAdminAction } from "@/app/actions/user-actions"
+import { isSystemAdmin } from "@/lib/api/user"
 import type { NavItem } from "@/components/app-shell"
 import { HomePage } from "@/components/pages/home-page"
 import { PatientSearchPage } from "@/components/pages/patient-search-page"
@@ -17,7 +17,6 @@ import { CampaignGridPage } from "@/components/pages/campaign-grid-page"
 import { PatientDetailsPage } from "@/components/pages/patient-details-page"
 import { QueryBuilderPage } from "@/components/pages/query-builder-page"
 
-// Define navigation items for the template app
 const navItems: NavItem[] = [
   { name: "Home", key: "home", icon: LayoutDashboard },
   { name: "Patient Search", key: "patient-search", icon: UserSearch },
@@ -29,15 +28,15 @@ export function HomePageClient() {
   const { currentView, setCurrentView, patientId, closePatient } = useNavigation()
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [isSystemAdmin, setIsSystemAdmin] = useState(false)
+  const [isUserSystemAdmin, setIsUserSystemAdmin] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
   useSessionExpired()
 
   useEffect(() => {
     const checkAdmin = async () => {
-      const isAdmin = await isSystemAdminAction()
-      setIsSystemAdmin(isAdmin)
+      const adminStatus = await isSystemAdmin()
+      setIsUserSystemAdmin(adminStatus)
     }
     checkAdmin()
   }, [])
@@ -108,7 +107,7 @@ export function HomePageClient() {
         </div>
         <div className="p-2 border-t border-sidebar-border">
           <div className={`flex items-center ${isSidebarCollapsed ? "justify-center" : "justify-between"}`}>
-            {isSystemAdmin && (
+            {isUserSystemAdmin && (
               <Button
                 variant="ghost"
                 size={isSidebarCollapsed ? "icon" : "default"}
@@ -124,7 +123,7 @@ export function HomePageClient() {
               variant="ghost"
               size="icon"
               onClick={toggleSidebar}
-              className={`h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent ${!isSystemAdmin ? "ml-auto" : ""}`}
+              className={`h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent ${!isUserSystemAdmin ? "ml-auto" : ""}`}
               title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
               {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -143,7 +142,6 @@ export function HomePageClient() {
         </div>
       </main>
 
-      {/* Patient Details Overlay */}
       {patientId && (
         <div className="fixed inset-0 z-50 bg-background">
           <PatientDetailsPage personId={patientId} onBack={closePatient} />

@@ -1,99 +1,140 @@
-// ... existing code ...
+# Client-Side API Patterns
 
-## Checklist for New Query Actions
+This document describes patterns for making 1health API calls from the client side.
 
-- [ ] File named `query-{entity-type}.ts` in `app/actions/query/`
-- [ ] Entity type, attributes, and relationships are documented/verified
-- [ ] Function exported from `query/index.ts`
-- [ ] Types added to `query/types.ts` if reusable
-- [ ] Response parsing handles flattened attribute format
+## Architecture Overview
 
----
+All 1health API calls are made directly from the browser using `authFetch()` from `lib/auth-client.ts`. The only server-side operation is the initial LPL decryption and token exchange.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      SERVER-SIDE (Minimal)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  /api/token (POST)                                              │
+│    - Decrypts LPL using ONEHEALTH_SECRET_KEY                    │
+│    - Exchanges one-time code for OAuth tokens                   │
+│    - Sets cookies (access_token, refresh_token)                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      CLIENT-SIDE (All API calls)                │
+├─────────────────────────────────────────────────────────────────┤
+│  lib/auth-client.ts                                             │
+│    - authFetch() - Authenticated fetch wrapper                  │
+│    - refreshToken() - Direct token refresh with 1health         │
+│    - Cookie utilities                                           │
+│                                                                 │
+│  lib/api/*.ts                                                   │
+│    - patient-search.ts - Patient search API                     │
+│    - person.ts - Person CRUD operations                         │
+│    - insurance.ts - Insurance operations                        │
+│    - type-metadata.ts - Type definitions and metadata           │
+│    - query.ts - Generic query API                               │
+│    - query-person.ts - Person-specific queries                  │
+│    - journey-grid.ts - Journey grid data                        │
+│    - user.ts - Current user info                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Using authFetch
+
+```typescript
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+
+async function fetchData() {
+  const baseUrl = getOneHealthBaseUrl()
+  const response = await authFetch(`${baseUrl}/api/v2/some-endpoint`, {
+    method: "POST",
+    body: JSON.stringify({ key: "value" }),
+  })
+  
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+  
+  return response.json()
+}
+```
+
+## API Modules
+
+### Patient Search (`lib/api/patient-search.ts`)
+
+```typescript
+import { searchPatients } from "@/lib/api/patient-search"
+
+const results = await searchPatients({
+  firstName: "John",
+  lastName: "Doe",
+  dateOfBirth: "1990-01-01",
+})
+```
+
+### Type Metadata (`lib/api/type-metadata.ts`)
+
+```typescript
+import { fetchAllTypes, fetchTypeDetails } from "@/lib/api/type-metadata"
+
+const types = await fetchAllTypes()
+const personType = await fetchTypeDetails("Person")
+```
+
+### Generic Query (`lib/api/query.ts`)
+
+```typescript
+import { executeQuery } from "@/lib/api/query"
+
+const result = await executeQuery({
+  key: "Person",
+  attributes: ["id", "firstName", "lastName"],
+  filter: "firstName==John",
+  limit: 10,
+})
+```
 
 ## Query Relationship Key Format
 
-When building queries with relationships, the relationship key must follow a specific format.
-
-### CORRECT Format
+When building queries with relationships, the relationship key must follow this format:
 
 ```
 {FromType}.{relKey}.{ToType}
 ```
 
-Where `relKey` is the **EXACT value from the API's `relationship.relKey` property**.
+**IMPORTANT:** Use the `relKey` from the API response, not a constructed name.
 
-**IMPORTANT:** Do NOT construct the relKey yourself by concatenating type names! Always use the `relKey` provided by the `GET /v2/type/key/{type}` API response.
-
-**Example:**
+Example:
 ```
 WorkflowTemplate.WorkflowTemplateStepIsRootOfWorkflowTemplate.WorkflowTemplateStep
 ```
 
-This format consists of:
-1. **FromType** - The source type boKey (e.g., `WorkflowTemplate`)
-2. A dot separator
-3. **relKey** - The exact relationship key from the API (e.g., `WorkflowTemplateStepIsRootOfWorkflowTemplate`)
-4. A dot separator  
-5. **ToType** - The target type boKey (e.g., `WorkflowTemplateStep`)
+## Token Refresh
 
-### INCORRECT Format (Do NOT use)
+Token refresh happens automatically:
+1. When `authFetch()` receives a 401 response
+2. When manually triggered via `refreshToken()`
 
-```
-{FromType}.{ConstructedRelName}.{ToType}
-```
+```typescript
+import { refreshToken } from "@/lib/auth-client"
 
-**Wrong Examples:**
-```
-WorkflowTemplate.RootNode.WorkflowTemplateStep  ❌  (using relationship.name)
-WorkflowTemplate.WorkflowTemplateRootNodeWorkflowTemplateStep.WorkflowTemplateStep  ❌  (concatenating types)
-```
-
-### Getting the relKey
-
-The `relKey` comes from the `/v2/type/key/{typeName}` API response:
-
-```json
-{
-  "relationships": [
-    {
-      "name": "Root Node",
-      "relKey": "WorkflowTemplateStepIsRootOfWorkflowTemplate",
-      "toBoClassName": "Workflow Template Step",
-      ...
-    }
-  ]
+const success = await refreshToken()
+if (!success) {
+  // Redirect to login
+  window.location.href = "/auth"
 }
 ```
 
-Use `relationship.relKey` (e.g., `"WorkflowTemplateStepIsRootOfWorkflowTemplate"`), NOT `relationship.name` (e.g., `"Root Node"`).
-
-### Implementation
-
-The `formatRelationshipPath()` function in `lib/utils/type-helpers.ts` handles this formatting:
+## Error Handling
 
 ```typescript
-import { formatRelationshipPath } from "@/lib/utils/type-helpers"
+import { authFetch } from "@/lib/auth-client"
 
-// Pass the fromType, relKey (from API), and toType
-const path = formatRelationshipPath("WorkflowTemplate", "WorkflowTemplateStepIsRootOfWorkflowTemplate", "WorkflowTemplateStep")
-// Returns: "WorkflowTemplate.WorkflowTemplateStepIsRootOfWorkflowTemplate.WorkflowTemplateStep"
-```
-
-### Nested Relationships
-
-For nested relationships (chaining types), each level follows the same format using the relKey from each type's API response:
-
-```json
-{
-  "key": "WorkflowTemplate",
-  "relationships": [
-    {
-      "key": "WorkflowTemplate.WorkflowTemplateStepIsRootOfWorkflowTemplate.WorkflowTemplateStep",
-      "relationships": [
-        {
-          "key": "WorkflowTemplateStep.WorkflowTemplateStepStepDirectionWorkflowTemplateStep.WorkflowTemplateStep"
-        }
-      ]
-    }
-  ]
+try {
+  const response = await authFetch(url)
+  // Handle response
+} catch (error) {
+  if (error instanceof Error && error.message === "SESSION_EXPIRED") {
+    // Token refresh failed, redirect to login
+    window.location.href = "/auth"
+  }
+  throw error
 }

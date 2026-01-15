@@ -7,14 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { DataGrid } from "@/components/data-grid"
 import type { Column } from "@/components/data-grid/types"
-import { fetchJourneyGrid } from "@/app/actions/journey-grid-actions"
+import { fetchJourneyGrid } from "@/lib/api/journey-grid"
 import { Grid3X3, Search, X } from "lucide-react"
 
 interface CampaignGridPageProps {
   initialCampaignId?: string
   title?: string
   onJourneyClick?: (journey: Record<string, any>) => void
-  /** Optional column overrides to customize auto-generated columns */
   columnOverrides?: Record<string, Partial<Column>>
 }
 

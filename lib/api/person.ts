@@ -1,19 +1,10 @@
 /**
- * Person Actions
+ * Client-side Person API
  *
- * URL Patterns:
- *   - /api/v2/person/{personId} - Get person info
- *   - /api/v2/person/upsert - Create or update person
- *
- * Purpose: Person/patient data management
- *
- * Note: External system IDs use /api/v2/query (see app/actions/query/query-person.ts)
- * Note: Insurance operations use /api/v2/organization/patient (see insurance-actions.ts)
+ * Replaces: app/actions/person-actions.ts
  */
 
-"use server"
-
-import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-server"
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
 export interface PatientInfo {
   id: number
@@ -57,10 +48,8 @@ interface PersonApiResponse {
 
 export async function getPatientInfo(personId: string): Promise<PatientInfo | null> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
-    const { response } = await authFetch(`${baseUrl}/api/v2/person/${personId}?type=Patient`, {
-      method: "GET",
-    })
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/person/${personId}?type=Patient`, { method: "GET" })
 
     if (!response.ok) {
       console.error(`Failed to fetch patient info: ${response.status}`)
@@ -68,9 +57,6 @@ export async function getPatientInfo(personId: string): Promise<PatientInfo | nu
     }
 
     const data: PersonApiResponse = await response.json()
-
-    console.log("[v0] Patient API response location:", JSON.stringify(data.location, null, 2))
-    console.log("[v0] Patient API response phoneNumber:", data.phoneNumber)
 
     let normalizedPhone: string | undefined = undefined
     if (data.phoneNumber) {
@@ -101,7 +87,7 @@ export async function getPatientInfo(personId: string): Promise<PatientInfo | nu
       }
     }
 
-    const patientInfo: PatientInfo = {
+    return {
       id: data.id,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -117,8 +103,6 @@ export async function getPatientInfo(personId: string): Promise<PatientInfo | nu
       email: data.email || undefined,
       address: addressData,
     }
-
-    return patientInfo
   } catch (error) {
     console.error("Error fetching patient info:", error)
     return null
@@ -133,10 +117,7 @@ export interface UpsertPersonPayload {
   birthDate?: string
   biologicalGender?: string
   email?: string
-  phoneNumber?: {
-    region: string
-    value: string
-  }
+  phoneNumber?: { region: string; value: string }
   addLocation?: {
     addressLine1?: string
     addressLine2?: string
@@ -146,11 +127,7 @@ export interface UpsertPersonPayload {
     country?: string
     primary?: boolean
   }
-  markWithExternalSystemRecord?: {
-    id?: number
-    name: string
-    recordId: string
-  }
+  markWithExternalSystemRecord?: { id?: number; name: string; recordId: string }
 }
 
 export async function upsertPerson(
@@ -158,9 +135,7 @@ export async function upsertPerson(
   originalInfo?: PatientInfo,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const changedPayload: Record<string, unknown> = {
-      id: payload.id,
-    }
+    const changedPayload: Record<string, unknown> = { id: payload.id }
 
     if (!originalInfo) {
       Object.entries(payload).forEach(([key, value]) => {
@@ -169,30 +144,21 @@ export async function upsertPerson(
         }
       })
     } else {
-      if (payload.firstName && payload.firstName !== originalInfo.firstName) {
+      if (payload.firstName && payload.firstName !== originalInfo.firstName)
         changedPayload.firstName = payload.firstName
-      }
-      if (payload.lastName && payload.lastName !== originalInfo.lastName) {
-        changedPayload.lastName = payload.lastName
-      }
-      if (payload.middleName !== undefined && payload.middleName !== (originalInfo.middleName || "")) {
+      if (payload.lastName && payload.lastName !== originalInfo.lastName) changedPayload.lastName = payload.lastName
+      if (payload.middleName !== undefined && payload.middleName !== (originalInfo.middleName || ""))
         changedPayload.middleName = payload.middleName
-      }
-      if (payload.birthDate && payload.birthDate !== originalInfo.dateOfBirth) {
+      if (payload.birthDate && payload.birthDate !== originalInfo.dateOfBirth)
         changedPayload.birthDate = payload.birthDate
-      }
-      if (payload.biologicalGender && payload.biologicalGender !== originalInfo.gender) {
+      if (payload.biologicalGender && payload.biologicalGender !== originalInfo.gender)
         changedPayload.biologicalGender = payload.biologicalGender
-      }
-      if (payload.email !== undefined && payload.email !== (originalInfo.email || "")) {
+      if (payload.email !== undefined && payload.email !== (originalInfo.email || ""))
         changedPayload.email = payload.email
-      }
       if (payload.phoneNumber) {
         const originalPhone = originalInfo.phone?.replace(/\D/g, "") || ""
         const newPhone = payload.phoneNumber.value.replace(/\D/g, "")
-        if (newPhone !== originalPhone) {
-          changedPayload.phoneNumber = payload.phoneNumber
-        }
+        if (newPhone !== originalPhone) changedPayload.phoneNumber = payload.phoneNumber
       }
       if (payload.addLocation) {
         const origAddr = originalInfo.address || {}
@@ -210,12 +176,8 @@ export async function upsertPerson(
       }
     }
 
-    delete (changedPayload as Record<string, unknown>).markAsPatientToContextOrganization
-
-    console.log("[v0] Upsert payload being sent:", JSON.stringify(changedPayload, null, 2))
-
-    const baseUrl = await getOneHealthBaseUrl()
-    const { response } = await authFetch(`${baseUrl}/api/v2/person/upsert`, {
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/person/upsert`, {
       method: "POST",
       body: JSON.stringify(changedPayload),
     })

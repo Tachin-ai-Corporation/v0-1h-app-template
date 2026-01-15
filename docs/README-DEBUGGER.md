@@ -1,70 +1,49 @@
 # API Traffic Debugger
 
-Real-time API traffic monitoring system for debugging 1health API calls.
+Real-time API traffic monitoring in the browser console for debugging 1health API calls.
 
-## Enabling the Debugger
+## How It Works
 
-Set the environment variable:
+All API calls made through `authFetch()` in `lib/auth-client.ts` are automatically logged to the browser console with colored, collapsible output.
+
+## Log Format
+
+Each API call is logged as a collapsible group:
 
 ```
-NEXT_PUBLIC_ENABLE_DEBUG_STREAM=true
+▼ [1health] POST /api/v2/query (200 OK) 145ms
+    Request Headers: { Authorization: "Bearer [REDACTED]", ... }
+    Request Body: { "key": "Person", ... }
+    Response Body: { "data": [...], ... }
 ```
 
-When enabled, a floating terminal icon appears in the bottom-right corner of the app.
+## Color Coding
 
-## Features
+- **Green (2xx)**: Successful responses
+- **Yellow (4xx)**: Client errors
+- **Red (5xx)**: Server errors
+- **Blue**: Request info
 
-- **Real-time streaming**: Uses Server-Sent Events (SSE) for instant log updates
-- **Request/Response logging**: Captures all 1health API calls including:
-  - Initial LPL token exchange
-  - Token refresh calls
-  - All authenticated API calls via `authFetch()`
-- **Collapsible entries**: Click any log entry to see headers and body details
-- **Status color coding**: Visual indicators for response status codes
-- **Minimizable**: Collapse to a small bar at the bottom of the screen
-- **Auto-redaction**: Sensitive values (tokens, passwords) are automatically redacted
+## Sensitive Data Redaction
 
-## Log Sources
-
-| Source | Description |
-|--------|-------------|
-| `token-exchange` | Initial LPL decryption and one-time code exchange |
-| `token-refresh` | OAuth token refresh calls |
-| `api-call` | General API calls via `authFetch()` |
-| `auth` | Authentication-related events |
-
-## Log Types
-
-| Type | Icon | Description |
-|------|------|-------------|
-| `request` | ↑ (blue) | Outgoing HTTP request |
-| `response` | ↓ (green) | Incoming HTTP response |
-| `error` | ⚠ (red) | Error occurred |
-| `info` | ℹ (gray) | Informational message |
+The following values are automatically redacted in logs:
+- Authorization headers (Bearer tokens)
+- Refresh tokens in request bodies
 
 ## Architecture
 
 ```
-Server-Side                          Client-Side
-┌─────────────────┐                  ┌──────────────────────┐
-│ Token Routes    │──emit──▶         │                      │
-│ authFetch()     │        │         │ DebugTrafficConsole  │
-└─────────────────┘        │         │                      │
-                           ▼         │ EventSource          │
-                  ┌─────────────────┐│ - onmessage          │
-                  │ debugLogEmitter ││ - Auto-reconnect     │
-                  │ (EventEmitter)  │└──────────────────────┘
-                  └────────┬────────┘          ▲
-                           │                   │
-                           ▼                   │
-                  ┌─────────────────┐          │
-                  │ /api/debug/stream│──SSE────┘
-                  │ (SSE endpoint)  │
-                  └─────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      CLIENT-SIDE                                │
+├─────────────────────────────────────────────────────────────────┤
+│  lib/auth-client.ts                                             │
+│    - authFetch() wraps all 1health API calls                    │
+│    - Logs request/response to console.group()                   │
+│    - Auto-refresh on 401 responses                              │
+│    - Sensitive data redaction                                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Production Usage
+## Disabling Logs
 
-**Important**: Disable the debugger in production by removing or setting `NEXT_PUBLIC_ENABLE_DEBUG_STREAM=false`.
-
-The SSE endpoint returns 403 when debug mode is disabled.
+To disable API logging in production, set `enableLogging: false` when calling `authFetch()` or modify the `authFetch` function to check an environment variable.

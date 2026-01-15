@@ -1,17 +1,10 @@
 /**
- * Insurance Actions
+ * Client-side Insurance API
  *
- * URL Patterns:
- *   - /api/v2/organization/patient/{personId}/insurance/list - List patient insurances
- *   - /api/v2/organization/patient/{personId}/insurance - Create insurance
- *   - /api/v2/organization/patient/{personId}/insurance/{insuranceId} - Update insurance
- *
- * Purpose: Patient insurance management
+ * Replaces: app/actions/insurance-actions.ts
  */
 
-"use server"
-
-import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-server"
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
 export interface Insurance {
   id: number
@@ -41,19 +34,15 @@ export interface InsurancePayload {
   insuranceGroupId?: string
   insurancePrecedence: string
   relationshipToInsured?: string
-  insuranceOrganizationDTO: {
-    insuranceCompanyId: number
-  }
+  insuranceOrganizationDTO: { insuranceCompanyId: number }
 }
 
 export async function getPatientInsurances(personId: string): Promise<Insurance[]> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
-    const { response } = await authFetch(
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(
       `${baseUrl}/api/v2/organization/patient/${personId}/insurance/list?page=0&size=50`,
-      {
-        method: "GET",
-      },
+      { method: "GET" },
     )
 
     if (!response.ok) {
@@ -74,8 +63,8 @@ export async function createPatientInsurance(
   payload: InsurancePayload,
 ): Promise<{ success: boolean; data?: Insurance; error?: string }> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
-    const { response } = await authFetch(`${baseUrl}/api/v2/organization/patient/${personId}/insurance`, {
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/organization/patient/${personId}/insurance`, {
       method: "POST",
       body: JSON.stringify(payload),
     })
@@ -100,14 +89,11 @@ export async function updatePatientInsurance(
   payload: InsurancePayload,
 ): Promise<{ success: boolean; data?: Insurance; error?: string }> {
   try {
-    const baseUrl = await getOneHealthBaseUrl()
-    const { response } = await authFetch(
-      `${baseUrl}/api/v2/organization/patient/${personId}/insurance/${insuranceId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      },
-    )
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/organization/patient/${personId}/insurance/${insuranceId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    })
 
     if (!response.ok) {
       const errorText = await response.text()

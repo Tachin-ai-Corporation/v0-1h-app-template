@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Shield } from "lucide-react"
-import type { Insurance } from "@/app/actions/insurance-actions"
+import type { Insurance } from "@/lib/api/insurance"
 
 interface PatientInsuranceCardProps {
   insurances: Insurance[]

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { ArrowLeft, Settings, RefreshCw, Clock, Key, AlertTriangle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useTokenRefresh } from "@/components/token-refresh-provider"
+import { refreshToken, getCookie } from "@/lib/auth-client"
 
 interface SettingsPageProps {
   onClose: () => void
@@ -17,9 +17,6 @@ interface TokenInfo {
   rawToken: string | null
 }
 
-/**
- * Parses a JWT token and extracts the expiration time
- */
 function parseJwt(token: string): { exp?: number } | null {
   try {
     const parts = token.split(".")
@@ -31,40 +28,19 @@ function parseJwt(token: string): { exp?: number } | null {
   }
 }
 
-/**
- * Gets a cookie value by name
- */
-function getCookie(name: string): string | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))
-  return match ? decodeURIComponent(match[1]) : null
-}
-
-/**
- * Formats time remaining in a human-readable format
- */
 function formatTimeRemaining(ms: number): string {
   if (ms <= 0) return "Expired"
-
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
   const hours = Math.floor(minutes / 60)
   const days = Math.floor(hours / 24)
 
-  if (days > 0) {
-    return `${days}d ${hours % 24}h ${minutes % 60}m`
-  } else if (hours > 0) {
-    return `${hours}h ${minutes % 60}m ${seconds % 60}s`
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  } else {
-    return `${seconds}s`
-  }
+  if (days > 0) return `${days}d ${hours % 24}h ${minutes % 60}m`
+  else if (hours > 0) return `${hours}h ${minutes % 60}m ${seconds % 60}s`
+  else if (minutes > 0) return `${minutes}m ${seconds % 60}s`
+  else return `${seconds}s`
 }
 
-/**
- * Gets token info from cookies
- */
 function getTokenInfo(tokenName: string): TokenInfo {
   const token = getCookie(tokenName)
   if (!token) {
@@ -73,7 +49,6 @@ function getTokenInfo(tokenName: string): TokenInfo {
 
   const parsed = parseJwt(token)
   if (!parsed?.exp) {
-    // For tokens without exp in JWT, check the corresponding expires_at cookie
     const expiresAtCookieName = tokenName === "access_token" ? "token_expires_at" : "refresh_token_expires_at"
     const expiresAtCookie = getCookie(expiresAtCookieName)
     if (expiresAtCookie) {
@@ -81,30 +56,19 @@ function getTokenInfo(tokenName: string): TokenInfo {
       const expiresAt = expiresAtSeconds * 1000
       const now = Date.now()
       const remaining = expiresAt - now
-      return {
-        expiresAt,
-        isExpired: remaining <= 0,
-        timeRemaining: formatTimeRemaining(remaining),
-        rawToken: token,
-      }
+      return { expiresAt, isExpired: remaining <= 0, timeRemaining: formatTimeRemaining(remaining), rawToken: token }
     }
     return { expiresAt: null, isExpired: false, timeRemaining: "Unknown", rawToken: token }
   }
 
-  const expiresAt = parsed.exp * 1000 // Convert to milliseconds
+  const expiresAt = parsed.exp * 1000
   const now = Date.now()
   const remaining = expiresAt - now
 
-  return {
-    expiresAt,
-    isExpired: remaining <= 0,
-    timeRemaining: formatTimeRemaining(remaining),
-    rawToken: token,
-  }
+  return { expiresAt, isExpired: remaining <= 0, timeRemaining: formatTimeRemaining(remaining), rawToken: token }
 }
 
 export function SettingsPage({ onClose }: SettingsPageProps) {
-  const { refreshToken } = useTokenRefresh()
   const [accessTokenInfo, setAccessTokenInfo] = useState<TokenInfo>({
     expiresAt: null,
     isExpired: true,
@@ -120,7 +84,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "success" | "error">("idle")
 
-  // Update token info every second
   const updateTokenInfo = useCallback(() => {
     setAccessTokenInfo(getTokenInfo("access_token"))
     setRefreshTokenInfo(getTokenInfo("refresh_token"))
@@ -142,9 +105,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       const success = await refreshToken()
       console.log("[Settings] Refresh completed, success:", success)
       setRefreshStatus(success ? "success" : "error")
-      if (success) {
-        updateTokenInfo()
-      }
+      if (success) updateTokenInfo()
     } catch (error) {
       console.error("[Settings] Refresh error:", error)
       setRefreshStatus("error")
@@ -156,7 +117,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
       <div className="flex items-center gap-4 px-6 py-4 border-b border-border bg-card">
         <Button variant="ghost" size="icon" onClick={onClose} className="text-foreground hover:bg-accent">
           <ArrowLeft className="h-5 w-5" />
@@ -167,7 +127,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="bg-card rounded-lg border border-border shadow-sm p-6">
@@ -203,7 +162,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             )}
 
             <div className="space-y-4">
-              {/* Access Token */}
               <div className="p-4 bg-muted rounded-md">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -240,7 +198,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 )}
               </div>
 
-              {/* Refresh Token */}
               <div className="p-4 bg-muted rounded-md">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -271,7 +228,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           </div>
 
-          {/* Placeholder Section */}
           <div className="bg-card rounded-lg border border-border shadow-sm p-6">
             <h2 className="text-lg font-semibold text-foreground mb-2">Application Settings</h2>
             <p className="text-sm text-muted-foreground mb-6">

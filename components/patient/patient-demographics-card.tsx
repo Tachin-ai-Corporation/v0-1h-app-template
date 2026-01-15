@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { User, Calendar, Phone, Mail, MapPin, Edit } from "lucide-react"
-import type { PatientInfo } from "@/app/actions/person-actions"
+import type { PatientInfo } from "@/lib/api/person"
 
 interface PatientDemographicsCardProps {
   patient: PatientInfo | null

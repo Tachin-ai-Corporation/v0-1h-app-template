@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExternalIdSelector } from "@/components/external-id-selector"
-import type { ExternalSystemId } from "@/app/actions/query"
+import type { ExternalSystemId } from "@/lib/api/query-person"
 
 interface PatientExternalIdsCardProps {
   externalIds: ExternalSystemId[]

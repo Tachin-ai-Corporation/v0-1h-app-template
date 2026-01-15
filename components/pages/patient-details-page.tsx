@@ -10,14 +10,12 @@ import { PatientDemographicsCard } from "@/components/patient/patient-demographi
 import { PatientInsuranceCard } from "@/components/patient/patient-insurance-card"
 import { PatientExternalIdsCard } from "@/components/patient/patient-external-ids-card"
 import { EditPersonDialog } from "@/components/edit-person-dialog"
-import { getPatientInfo, type PatientInfo } from "@/app/actions/person-actions"
-import { getPatientInsurances, type Insurance } from "@/app/actions/insurance-actions"
-import { getExternalSystemIds, type ExternalSystemId } from "@/app/actions/query"
+import { getPatientInfo, type PatientInfo } from "@/lib/api/person"
+import { getPatientInsurances, type Insurance } from "@/lib/api/insurance"
+import { getExternalSystemIds, type ExternalSystemId } from "@/lib/api/query-person"
 
 interface PatientDetailsPageProps {
-  /** Optional pre-configured person ID */
   personId?: string
-  /** Callback when user wants to go back */
   onBack?: () => void
 }
 
@@ -42,7 +40,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
     setIsLoadingInsurance(true)
     setIsLoadingExternalIds(true)
 
-    // Load patient info
     const patientResult = await getPatientInfo(personId)
     setPatient(patientResult)
     setIsLoadingPatient(false)
@@ -54,7 +51,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
       return
     }
 
-    // Load insurance and external IDs in parallel
     const [insuranceResult, externalIdsResult] = await Promise.all([
       getPatientInsurances(personId),
       getExternalSystemIds(patientResult.id),
@@ -93,7 +89,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center gap-4 p-4 border-b bg-background">
         {onBack && (
           <Button variant="ghost" size="icon" onClick={onBack}>
@@ -103,7 +98,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
         <h1 className="text-xl font-semibold">Patient Details</h1>
       </div>
 
-      {/* Search bar if no personId provided */}
       {!initialPersonId && (
         <div className="p-4 border-b bg-muted/30">
           <div className="flex gap-2 max-w-md">
@@ -120,7 +114,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
         </div>
       )}
 
-      {/* Content */}
       <div className="flex-1 overflow-auto p-4">
         {error && (
           <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-lg p-4 mb-4">
@@ -148,7 +141,6 @@ export function PatientDetailsPage({ personId: initialPersonId, onBack }: Patien
         )}
       </div>
 
-      {/* Edit Dialog */}
       {patient && (
         <EditPersonDialog
           open={isEditDialogOpen}

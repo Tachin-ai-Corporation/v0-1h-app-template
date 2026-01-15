@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ChevronDown, Copy, Check, ExternalLink, Loader2 } from "lucide-react"
-import type { ExternalSystemId } from "@/app/actions/query"
+import type { ExternalSystemId } from "@/lib/api/query-person"
 
 interface ExternalIdSelectorProps {
   externalIds: ExternalSystemId[]

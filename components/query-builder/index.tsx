@@ -10,8 +10,8 @@ import { TypeSelector } from "./type-selector"
 import { TypeBlock } from "./type-block"
 import { TestPanel } from "./test-panel"
 import { ImportQueryDialog } from "./import-query-dialog"
-import { fetchAllTypes, fetchTypeDetails, type TypeAttribute, type TypeRelationship } from "@/app/actions/type-actions"
-import { executeQuery } from "@/app/actions/query-actions"
+import { fetchAllTypes, fetchTypeDetails, type TypeAttribute, type TypeRelationship } from "@/lib/api/type-metadata"
+import { executeQuery } from "@/lib/api/query"
 import { buildQueryRequest } from "@/lib/utils/query-generator"
 import { parseQueryPayload, extractJsonFromInput } from "@/lib/utils/query-parser"
 import {
@@ -538,12 +538,25 @@ export function QueryBuilder() {
 
           {typeLoading && (
             <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">Loading type details...</CardContent>
+              <CardContent className="py-8">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Loading type details...
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {state.error && (
+            <Card className="border-destructive">
+              <CardContent className="py-4">
+                <p className="text-destructive text-sm">{state.error}</p>
+              </CardContent>
             </Card>
           )}
 
           {/* Pagination */}
-          {state.rootType && (
+          {state.rootType && !typeLoading && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Pagination</CardTitle>
@@ -551,31 +564,30 @@ export function QueryBuilder() {
               <CardContent>
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="limit" className="text-sm">
-                      Items per page:
+                    <Label htmlFor="limit" className="text-sm whitespace-nowrap">
+                      Items per page
                     </Label>
                     <Input
                       id="limit"
-                      name="limit"
                       type="number"
+                      min={1}
+                      max={1000}
                       value={state.limit}
-                      onChange={(e) => handleLimitChange(Number.parseInt(e.target.value) || 0)}
-                      className="w-20 h-9"
-                      min={0}
+                      onChange={(e) => handleLimitChange(Number.parseInt(e.target.value) || 10)}
+                      className="w-24"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="offset" className="text-sm">
-                      Page number:
+                    <Label htmlFor="offset" className="text-sm whitespace-nowrap">
+                      Page number
                     </Label>
                     <Input
                       id="offset"
-                      name="offset"
                       type="number"
+                      min={0}
                       value={state.offset}
                       onChange={(e) => handleOffsetChange(Number.parseInt(e.target.value) || 0)}
-                      className="w-20 h-9"
-                      min={0}
+                      className="w-24"
                     />
                   </div>
                 </div>
