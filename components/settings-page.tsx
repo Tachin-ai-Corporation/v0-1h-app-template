@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ArrowLeft, Settings, RefreshCw, Clock, Key, AlertTriangle, CheckCircle } from "lucide-react"
+import { ArrowLeft, Settings, RefreshCw, Clock, Key, AlertTriangle, CheckCircle, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { refreshToken, getCookie } from "@/lib/auth-client"
@@ -83,6 +83,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   })
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "success" | "error">("idle")
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
   const updateTokenInfo = useCallback(() => {
     setAccessTokenInfo(getTokenInfo("access_token"))
@@ -114,6 +115,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setTimeout(() => setRefreshStatus("idle"), 3000)
     }
   }
+
+  const copyToClipboard = useCallback((text: string, tokenName: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedToken(tokenName)
+      setTimeout(() => setCopiedToken(null), 2000)
+    })
+  }, [])
 
   return (
     <div className="h-full flex flex-col bg-background">
@@ -196,6 +204,31 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     </span>
                   </div>
                 )}
+                {accessTokenInfo.rawToken && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-muted-foreground">Token Value</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => copyToClipboard(accessTokenInfo.rawToken!, "access")}
+                      >
+                        {copiedToken === "access" ? (
+                          <Check className="h-3 w-3 mr-1 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3 mr-1" />
+                        )}
+                        {copiedToken === "access" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <div className="bg-background p-2 rounded border border-border overflow-hidden">
+                      <code className="text-xs font-mono text-foreground break-all block max-h-20 overflow-y-auto">
+                        {accessTokenInfo.rawToken}
+                      </code>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 bg-muted rounded-md">
@@ -222,6 +255,31 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     <span className="text-sm font-mono text-muted-foreground">
                       {new Date(refreshTokenInfo.expiresAt).toLocaleString()}
                     </span>
+                  </div>
+                )}
+                {refreshTokenInfo.rawToken && (
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-muted-foreground">Token Value</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => copyToClipboard(refreshTokenInfo.rawToken!, "refresh")}
+                      >
+                        {copiedToken === "refresh" ? (
+                          <Check className="h-3 w-3 mr-1 text-green-500" />
+                        ) : (
+                          <Copy className="h-3 w-3 mr-1" />
+                        )}
+                        {copiedToken === "refresh" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <div className="bg-background p-2 rounded border border-border overflow-hidden">
+                      <code className="text-xs font-mono text-foreground break-all block max-h-20 overflow-y-auto">
+                        {refreshTokenInfo.rawToken}
+                      </code>
+                    </div>
                   </div>
                 )}
               </div>
