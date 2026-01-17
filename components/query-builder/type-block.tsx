@@ -1,7 +1,18 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ChevronDown, ChevronRight, Search, Loader2, Link2, Copy, ArrowRight, ArrowLeft, Repeat } from "lucide-react"
+import {
+  ChevronDown,
+  ChevronRight,
+  Search,
+  Loader2,
+  Link2,
+  Copy,
+  ArrowRight,
+  ArrowLeft,
+  Repeat,
+  Trash2,
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -32,6 +43,7 @@ interface TypeBlockProps {
     sourceForwardRels: RelationshipSelection[],
     sourceBackwardRels: RelationshipSelection[],
   ) => void
+  onDelete?: () => void
   loadingRelationships: Set<string>
   depth?: number
   relationshipPath?: string
@@ -76,6 +88,7 @@ export function TypeBlock({
   onNestedRelationshipLimitChange,
   onRepeatAttributes,
   onRepeatPattern,
+  onDelete,
   loadingRelationships,
   depth = 0,
   relationshipPath,
@@ -234,21 +247,42 @@ export function TypeBlock({
                 )}
               </CardTitle>
             </div>
-            {recursiveRelationship && hasConfiguredSettings && onRepeatPattern && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 bg-transparent" onClick={handleRepeatPattern}>
-                      <Repeat className="h-4 w-4 mr-2" />
-                      Repeat Pattern
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Copy all attributes, filters, and relationships to the next recursive level</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+            <div className="flex items-center gap-2">
+              {recursiveRelationship && hasConfiguredSettings && onRepeatPattern && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 bg-transparent" onClick={handleRepeatPattern}>
+                        <Repeat className="h-4 w-4 mr-2" />
+                        Repeat Pattern
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Copy all attributes, filters, and relationships to the next recursive level</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {onDelete && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 bg-transparent text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        onClick={onDelete}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Delete this card and all nested cards</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
           </div>
         </CardHeader>
 
@@ -472,6 +506,46 @@ export function TypeBlock({
                                         </div>
                                       )}
                                     </div>
+                                    {rel.enabled && rel.attributes.length > 0 && (
+                                      <div className="mt-2">
+                                        <TypeBlock
+                                          typeName={rel.targetType}
+                                          typeLabel={rel.targetTypeLabel || rel.targetType}
+                                          attributes={rel.attributes}
+                                          relationships={rel.nestedRelationships.filter(
+                                            (nr) => nr.direction !== "BACKWARDS",
+                                          )}
+                                          backwardRelationships={rel.nestedRelationships.filter(
+                                            (nr) => nr.direction === "BACKWARDS",
+                                          )}
+                                          onAttributeChange={(attrKey, changes) =>
+                                            onRelationshipAttributeChange([...parentRelPath, rel.id], attrKey, changes)
+                                          }
+                                          onRelationshipToggle={(nestedRelId, enabled) =>
+                                            onNestedRelationshipToggle([...parentRelPath, rel.id, nestedRelId], enabled)
+                                          }
+                                          onRelationshipLimitChange={(nestedRelId, limit) =>
+                                            onNestedRelationshipLimitChange(
+                                              [...parentRelPath, rel.id, nestedRelId],
+                                              limit,
+                                            )
+                                          }
+                                          onRelationshipAttributeChange={onRelationshipAttributeChange}
+                                          onNestedRelationshipToggle={onNestedRelationshipToggle}
+                                          onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
+                                          onRepeatAttributes={onRepeatAttributes}
+                                          onRepeatPattern={onRepeatPattern}
+                                          onDelete={() => onNestedRelationshipToggle([...parentRelPath, rel.id], false)}
+                                          loadingRelationships={loadingRelationships}
+                                          depth={depth + 1}
+                                          relationshipPath={rel.relationshipName}
+                                          idPrefix={`${idPrefix}${rel.id}-`}
+                                          parentRelPath={[...parentRelPath, rel.id]}
+                                          ancestorTypes={currentAncestorTypes}
+                                          collapseSignal={collapseSignal}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                 )
                               })}
@@ -525,6 +599,7 @@ export function TypeBlock({
             onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
             onRepeatAttributes={onRepeatAttributes}
             onRepeatPattern={onRepeatPattern}
+            onDelete={onDelete}
             loadingRelationships={loadingRelationships}
             depth={depth + 1}
             relationshipPath={rel.relationshipKey}

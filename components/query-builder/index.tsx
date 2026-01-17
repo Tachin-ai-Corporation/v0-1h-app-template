@@ -633,6 +633,49 @@ export function QueryBuilder() {
     [state.relationships, state.backwardRelationships, handleRelationshipToggle],
   )
 
+  const handleDeleteRelationship = useCallback((relPath: string[]) => {
+    console.log(`[v0] handleDeleteRelationship: path=${relPath.join(".")}`)
+
+    const deleteRelationshipInTree = (
+      relationships: RelationshipSelection[],
+      path: string[],
+    ): RelationshipSelection[] => {
+      if (path.length === 0) return relationships
+      const [currentId, ...rest] = path
+
+      // If this is the last ID in the path, filter it out (delete it)
+      if (rest.length === 0) {
+        return relationships.map((rel) => {
+          if (rel.id === currentId) {
+            // Disable the relationship and clear its nested data
+            return {
+              ...rel,
+              enabled: false,
+              attributes: [],
+              nestedRelationships: [],
+            }
+          }
+          return rel
+        })
+      }
+
+      // Otherwise, recurse into nested relationships
+      return relationships.map((rel) => {
+        if (rel.id !== currentId) return rel
+        return {
+          ...rel,
+          nestedRelationships: deleteRelationshipInTree(rel.nestedRelationships, rest),
+        }
+      })
+    }
+
+    setState((prev) => ({
+      ...prev,
+      relationships: deleteRelationshipInTree(prev.relationships, relPath),
+      backwardRelationships: deleteRelationshipInTree(prev.backwardRelationships || [], relPath),
+    }))
+  }, [])
+
   const handleCollapseAll = useCallback(() => {
     setCollapseKey((prev) => prev + 1)
   }, [])
@@ -700,6 +743,7 @@ export function QueryBuilder() {
               onNestedRelationshipLimitChange={(relPath, limit) => handleRelationshipLimitChange(relPath, limit)}
               onRepeatAttributes={handleRepeatAttributes}
               onRepeatPattern={handleRepeatPattern}
+              onDeleteRelationship={handleDeleteRelationship}
               loadingRelationships={loadingRelationships}
               depth={0}
               idPrefix="root-"
