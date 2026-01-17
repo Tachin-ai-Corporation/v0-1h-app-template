@@ -213,7 +213,7 @@ export function TypeBlock({
   }
 
   return (
-    <div className="space-y-3">
+    <div className={`space-y-3 ${depth > 0 ? "ml-6" : ""}`}>
       <Card className={`border-l-4 ${borderColor}`}>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -523,17 +523,9 @@ export function TypeBlock({
             onRelationshipAttributeChange={(nestedRelPath, attrKey, changes) =>
               onRelationshipAttributeChange([...currentRelPath, ...nestedRelPath], attrKey, changes)
             }
-            onNestedRelationshipToggle={(nestedRelPath, enabled) =>
-              onNestedRelationshipToggle([...currentRelPath, ...nestedRelPath], enabled)
-            }
-            onNestedRelationshipLimitChange={(nestedRelPath, limit) =>
-              onNestedRelationshipLimitChange([...currentRelPath, ...nestedRelPath], limit)
-            }
-            onRepeatAttributes={(nestedRelPath, sourceAttrs) => {
-              if (onRepeatAttributes) {
-                onRepeatAttributes([...currentRelPath, ...nestedRelPath], sourceAttrs)
-              }
-            }}
+            onNestedRelationshipToggle={onNestedRelationshipToggle}
+            onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
+            onRepeatAttributes={onRepeatAttributes}
             onRepeatPattern={onRepeatPattern}
             loadingRelationships={loadingRelationships}
             depth={depth + 1}

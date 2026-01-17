@@ -215,7 +215,6 @@ async function buildRelationshipSelections(
       nestedRelationships: [],
     }
 
-    // If enabled, use prefetched data instead of fetching
     if (payloadRel) {
       const targetTypeData = prefetchedTypes.get(targetTypeKey)
 
@@ -223,13 +222,15 @@ async function buildRelationshipSelections(
         const filterMap = parseFilterString(payloadRel.filter || "")
         selection.attributes = mapAttributesToSelections(targetTypeData.attributes, payloadRel.attributes, filterMap)
 
-        // Recursively build nested relationships using prefetched data
+        // This ensures sibling relationships like WorkflowTemplateStepSubmittedByPerson.Person
+        // are available at each nesting level
         const nestedResult = await buildRelationshipSelections(
           payloadRel.relationships,
           targetTypeData.relationships,
           targetTypeKey,
           prefetchedTypes,
         )
+        // Combine forward and backward into nestedRelationships
         selection.nestedRelationships = [...nestedResult.forward, ...nestedResult.backward]
       }
     }
