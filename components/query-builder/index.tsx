@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Play, Database, ChevronsDownUp } from "lucide-react"
+import { Database, ChevronsDownUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TypeSelector } from "./type-selector"
@@ -355,6 +355,11 @@ export function QueryBuilder() {
                 <ChevronsDownUp className="h-4 w-4 mr-2" />
                 Collapse All
               </Button>
+              {state.rootType && (
+                <Button variant="outline" size="sm" onClick={() => setTestPanelOpen(true)}>
+                  View Query
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -393,25 +398,7 @@ export function QueryBuilder() {
         />
       )}
 
-      {state.rootType && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={handleExecute}
-                disabled={isExecuting || !queryRequest}
-                className="flex items-center gap-2"
-              >
-                <Play className="h-4 w-4" />
-                {isExecuting ? "Executing..." : "Execute Query"}
-              </Button>
-              <Button variant="outline" onClick={() => setTestPanelOpen(true)}>
-                View Query JSON
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
 
       <TestPanel
         open={testPanelOpen}

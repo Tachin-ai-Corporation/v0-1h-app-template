@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, Suspense, type ReactNode } from "react"
-import { ChevronLeft, ChevronRight, Home, Search, type LucideIcon } from "lucide-react"
+import { ChevronLeft, ChevronRight, Home, Search, Type as type, LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Header } from "@/components/header"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -111,7 +111,7 @@ export function AppShell({
       <main
         className={`fixed top-16 bottom-0 right-0 transition-all duration-300 ${isSidebarCollapsed ? "left-16" : "left-48"} bg-gradient-to-b from-[#ECF0F8] to-[#788CB3] dark:from-slate-900 dark:to-slate-800`}
       >
-        <div className="w-full h-full overflow-hidden relative">
+        <div className="w-full h-full overflow-auto relative">
           <Suspense fallback={<div className="flex items-center justify-center h-full">Loading...</div>}>
             <div className="w-full h-full">{children}</div>
           </Suspense>
