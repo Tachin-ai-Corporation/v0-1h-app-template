@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Play, Database, ChevronsDownUp } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { TypeSelector } from "./type-selector"
 import { TypeBlock } from "./type-block"
@@ -670,7 +668,7 @@ export function QueryBuilder() {
         <div className="space-y-4 w-full">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">1. Select Root Type</CardTitle>
+              <CardTitle className="text-base">Select Root Type</CardTitle>
               <CardDescription>Choose the starting type for your query</CardDescription>
             </CardHeader>
             <CardContent>
@@ -707,6 +705,11 @@ export function QueryBuilder() {
               idPrefix="root-"
               ancestorTypes={[]}
               collapseSignal={collapseKey}
+              isRoot={true}
+              limit={state.limit}
+              offset={state.offset}
+              onLimitChange={handleLimitChange}
+              onOffsetChange={handleOffsetChange}
             />
           )}
 
@@ -725,45 +728,6 @@ export function QueryBuilder() {
             <Card className="border-destructive">
               <CardContent className="py-4">
                 <p className="text-destructive text-sm">{state.error}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {state.rootType && !typeLoading && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Pagination</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="limit" className="text-sm whitespace-nowrap">
-                      Items per page
-                    </Label>
-                    <Input
-                      id="limit"
-                      type="number"
-                      min={1}
-                      max={1000}
-                      value={state.limit}
-                      onChange={(e) => handleLimitChange(Number.parseInt(e.target.value) || 10)}
-                      className="w-24"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="offset" className="text-sm whitespace-nowrap">
-                      Page number
-                    </Label>
-                    <Input
-                      id="offset"
-                      type="number"
-                      min={0}
-                      value={state.offset}
-                      onChange={(e) => handleOffsetChange(Number.parseInt(e.target.value) || 0)}
-                      className="w-24"
-                    />
-                  </div>
-                </div>
               </CardContent>
             </Card>
           )}

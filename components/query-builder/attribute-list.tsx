@@ -195,25 +195,20 @@ function AttributeRow({ attr, idPrefix, onChangeRef }: AttributeRowProps) {
   const valueId = `${idPrefix}${attr.key}-value`
   const valueEndId = `${idPrefix}${attr.key}-value-end`
 
-  console.log(`[v0] AttributeRow render: ${attr.key}, selected=${attr.selected}, filterEnabled=${attr.filterEnabled}`)
-
   const operators = useMemo(() => getOperatorsForType(attr.type), [attr.type])
 
   const isTimestamp = attr.type === "TIMESTAMP" || attr.type === "DATE" || attr.type === "DATETIME"
   const isRangeOperator = attr.filterOperator === "range"
 
   const handleSelectedChange = (checked: boolean | "indeterminate") => {
-    console.log(`[v0] handleSelectedChange: ${attr.key} -> ${checked}`)
     onChangeRef.current?.(attr.key, { selected: checked === true })
   }
 
   const handleFilterEnabledChange = (checked: boolean | "indeterminate") => {
-    console.log(`[v0] handleFilterEnabledChange: ${attr.key} -> ${checked}`)
     onChangeRef.current?.(attr.key, { filterEnabled: checked === true })
   }
 
   const handleOperatorChange = (value: string) => {
-    console.log(`[v0] handleOperatorChange: ${attr.key} -> ${value}`)
     onChangeRef.current?.(attr.key, { filterOperator: value as FilterOperator })
   }
 
@@ -225,7 +220,6 @@ function AttributeRow({ attr, idPrefix, onChangeRef }: AttributeRowProps) {
       newValue = applyDefaultTimeToDate(newValue, attr.filterOperator, false)
     }
 
-    console.log(`[v0] handleValueChange: ${attr.key} -> ${newValue}`)
     onChangeRef.current?.(attr.key, { filterValue: newValue })
   }
 
@@ -237,12 +231,10 @@ function AttributeRow({ attr, idPrefix, onChangeRef }: AttributeRowProps) {
       newValue = applyDefaultTimeToDate(newValue, attr.filterOperator, true)
     }
 
-    console.log(`[v0] handleValueEndChange: ${attr.key} -> ${newValue}`)
     onChangeRef.current?.(attr.key, { filterValueEnd: newValue })
   }
 
   const handleSelectValueChange = (value: string) => {
-    console.log(`[v0] handleSelectValueChange: ${attr.key} -> ${value}`)
     onChangeRef.current?.(attr.key, { filterValue: value })
   }
 
