@@ -535,7 +535,7 @@ export function TypeBlock({
                                           onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
                                           onRepeatAttributes={onRepeatAttributes}
                                           onRepeatPattern={onRepeatPattern}
-                                          onDelete={() => onNestedRelationshipToggle([...parentRelPath, rel.id], false)}
+                                          onDelete={() => onRelationshipToggle(rel.id, false)}
                                           loadingRelationships={loadingRelationships}
                                           depth={depth + 1}
                                           relationshipPath={rel.relationshipName}
@@ -599,7 +599,7 @@ export function TypeBlock({
             onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
             onRepeatAttributes={onRepeatAttributes}
             onRepeatPattern={onRepeatPattern}
-            onDelete={onDelete}
+            onDelete={() => onRelationshipToggle(rel.id, false)}
             loadingRelationships={loadingRelationships}
             depth={depth + 1}
             relationshipPath={rel.relationshipKey}
