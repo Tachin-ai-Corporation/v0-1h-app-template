@@ -520,9 +520,7 @@ export function TypeBlock({
             onRelationshipLimitChange={(nestedRelId, limit) =>
               onNestedRelationshipLimitChange([...currentRelPath, nestedRelId], limit)
             }
-            onRelationshipAttributeChange={(nestedRelPath, attrKey, changes) =>
-              onRelationshipAttributeChange([...currentRelPath, ...nestedRelPath], attrKey, changes)
-            }
+            onRelationshipAttributeChange={onRelationshipAttributeChange}
             onNestedRelationshipToggle={onNestedRelationshipToggle}
             onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
             onRepeatAttributes={onRepeatAttributes}

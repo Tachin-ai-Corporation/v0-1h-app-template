@@ -185,13 +185,13 @@ async function buildRelationshipSelections(
   availableRelationships: TypeRelationship[],
   fromType: string,
   prefetchedTypes: Map<string, TypeDefinition>,
-  depth = 0, // Add depth for debug logging
+  depth = 0,
 ): Promise<{ forward: RelationshipSelection[]; backward: RelationshipSelection[] }> {
   const forward: RelationshipSelection[] = []
   const backward: RelationshipSelection[] = []
 
   console.log(`[v0] buildRelationshipSelections depth=${depth} fromType=${fromType}`)
-  console.log(`[v0]   payloadRelationships:`, payloadRelationships?.map((r) => r.key) || [])
+  console.log(`[v0]   payloadRelationshipKeys:`, payloadRelationships?.map((r) => r.key) || [])
   console.log(`[v0]   availableRelationships:`, availableRelationships.length)
 
   for (const rel of availableRelationships) {
@@ -200,20 +200,23 @@ async function buildRelationshipSelections(
     const targetTypeKey = targetTypeRaw.replace(/\s+/g, "")
     const fromTypeKey = fromType.replace(/\s+/g, "")
 
-    const queryPath = isForward
+    const fullQueryPath = isForward
       ? `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
       : `${targetTypeKey}.${rel.relKey}.${fromTypeKey}`
 
-    // Check if this relationship is in the payload (enabled)
-    const payloadRel = payloadRelationships?.find((pr) => pr.key === queryPath)
+    const shortQueryPath = `${rel.relKey}.${targetTypeKey}`
+
+    const payloadRel = payloadRelationships?.find((pr) => pr.key === shortQueryPath)
 
     if (payloadRel) {
-      console.log(`[v0]   MATCH: ${queryPath} (has ${payloadRel.relationships?.length || 0} nested)`)
+      console.log(
+        `[v0]   MATCH: ${shortQueryPath} -> ${fullQueryPath} (has ${payloadRel.relationships?.length || 0} nested)`,
+      )
     }
 
     const selection: RelationshipSelection = {
       id: crypto.randomUUID(),
-      relationshipKey: queryPath,
+      relationshipKey: fullQueryPath, // Store full path for query generation
       relationshipName: rel.name,
       targetType: targetTypeKey,
       targetTypeLabel: targetTypeRaw,
@@ -238,12 +241,11 @@ async function buildRelationshipSelections(
           prefetchedTypes,
           depth + 1,
         )
-        // Combine forward and backward into nestedRelationships
         selection.nestedRelationships = [...nestedResult.forward, ...nestedResult.backward]
 
         const enabledNested = selection.nestedRelationships.filter((n) => n.enabled)
         console.log(
-          `[v0]   Built ${selection.nestedRelationships.length} nested for ${queryPath}, ${enabledNested.length} enabled`,
+          `[v0]   Built ${selection.nestedRelationships.length} nested for ${fullQueryPath}, ${enabledNested.length} enabled`,
         )
       }
     }
