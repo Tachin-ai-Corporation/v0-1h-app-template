@@ -78,8 +78,7 @@ export function buildQueryRequest(state: QueryBuilderState): QueryRequestBody | 
     request.filter = filterString
   }
 
-  const allRelationships = [...state.relationships, ...(state.backwardRelationships || [])]
-  const relationships = buildRelationships(allRelationships)
+  const relationships = buildRelationships(state.relationships)
   if (relationships.length > 0) {
     request.relationships = relationships
   }

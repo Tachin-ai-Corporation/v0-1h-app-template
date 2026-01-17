@@ -35,13 +35,11 @@ const BASELINE_ATTRIBUTES: TypeAttribute[] = [
 ]
 
 // Parse RSQL filter string into attribute filters
-// e.g., "workflowCampaignId==91009622;status=in=(Active,Pending);updated=ge="2026-01-04T00:00:00";updated=le="2026-01-12T00:00:00""
 function parseFilterString(filter: string): Map<string, { operator: string; value: string; valueEnd?: string }> {
   const filters = new Map<string, { operator: string; value: string; valueEnd?: string }>()
 
   if (!filter) return filters
 
-  // Split by semicolon (AND operator in RSQL), but be careful of semicolons in quoted values
   const parts: string[] = []
   let current = ""
   let inQuotes = false
@@ -60,7 +58,6 @@ function parseFilterString(filter: string): Map<string, { operator: string; valu
   }
   if (current.trim()) parts.push(current.trim())
 
-  // Group range filters (=ge= and =le= on same attribute)
   const rangeStarts = new Map<string, string>()
   const rangeEnds = new Map<string, string>()
 
@@ -68,14 +65,12 @@ function parseFilterString(filter: string): Map<string, { operator: string; valu
     const trimmed = part.trim()
     if (!trimmed) continue
 
-    // Check for =in= operator
     const inMatch = trimmed.match(/^(\w+)=in=$$([^)]*)$$/)
     if (inMatch) {
       filters.set(inMatch[1], { operator: "=in=", value: inMatch[2] })
       continue
     }
 
-    // Check for comparison operators (=ge=, =le=, =gt=, =lt=)
     const compMatch = trimmed.match(/^(\w+)(=ge=|=le=|=gt=|=lt=)"?([^"]*)"?$/)
     if (compMatch) {
       const [, attrKey, op, value] = compMatch
@@ -89,26 +84,22 @@ function parseFilterString(filter: string): Map<string, { operator: string; valu
       continue
     }
 
-    // Check for == operator
     const eqMatch = trimmed.match(/^(\w+)==(.+)$/)
     if (eqMatch) {
       filters.set(eqMatch[1], { operator: "==", value: eqMatch[2] })
     }
   }
 
-  // Combine range filters into a single "range" operator
   for (const [attrKey, startValue] of rangeStarts) {
     const endValue = rangeEnds.get(attrKey)
     if (endValue) {
       filters.set(attrKey, { operator: "range", value: startValue, valueEnd: endValue })
       rangeEnds.delete(attrKey)
     } else {
-      // Only start, treat as >= filter
       filters.set(attrKey, { operator: "=ge=", value: startValue })
     }
   }
 
-  // Handle any remaining end-only ranges as <= filters
   for (const [attrKey, endValue] of rangeEnds) {
     filters.set(attrKey, { operator: "=le=", value: endValue })
   }
@@ -116,7 +107,6 @@ function parseFilterString(filter: string): Map<string, { operator: string; valu
   return filters
 }
 
-// Convert TypeAttribute array to AttributeSelection array with selections applied
 function mapAttributesToSelections(
   typeAttributes: TypeAttribute[],
   selectedAttributes: string[] | undefined,
@@ -142,19 +132,6 @@ function mapAttributesToSelections(
   })
 }
 
-// Parse relationship key to extract components
-// e.g., "WorkflowTemplate.WorkflowTemplateHasGoToMarketOrganization.Organization"
-// Returns { fromType, relKey, toType }
-function parseRelationshipKey(key: string): { fromType: string; relKey: string; toType: string } | null {
-  const parts = key.split(".")
-  if (parts.length !== 3) return null
-  return {
-    fromType: parts[0],
-    relKey: parts[1],
-    toType: parts[2],
-  }
-}
-
 function collectTypeNamesToFetch(
   rootType: string,
   payloadRelationships: QueryRelationshipRequest[] | undefined,
@@ -164,14 +141,11 @@ function collectTypeNamesToFetch(
   function collectFromRelationships(relationships: QueryRelationshipRequest[] | undefined) {
     if (!relationships) return
     for (const rel of relationships) {
-      // Parse the relationship key to get the target type
       const parts = rel.key.split(".")
       if (parts.length === 3) {
-        // Add both types from the relationship key (in case of backward relationships)
         types.add(parts[0])
         types.add(parts[2])
       }
-      // Recursively collect from nested relationships
       collectFromRelationships(rel.relationships)
     }
   }
@@ -186,13 +160,8 @@ async function buildRelationshipSelections(
   fromType: string,
   prefetchedTypes: Map<string, TypeDefinition>,
   depth = 0,
-): Promise<{ forward: RelationshipSelection[]; backward: RelationshipSelection[] }> {
-  const forward: RelationshipSelection[] = []
-  const backward: RelationshipSelection[] = []
-
-  console.log(`[v0] buildRelationshipSelections depth=${depth} fromType=${fromType}`)
-  console.log(`[v0]   payloadRelationshipKeys:`, payloadRelationships?.map((r) => r.key) || [])
-  console.log(`[v0]   availableRelationships:`, availableRelationships.length)
+): Promise<RelationshipSelection[]> {
+  const results: RelationshipSelection[] = []
 
   for (const rel of availableRelationships) {
     const isForward = rel.direction === "FORWARD"
@@ -202,16 +171,11 @@ async function buildRelationshipSelections(
 
     const fullQueryPath = `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
 
-    // Match payload relationship using the full 3-part key
     const payloadRel = payloadRelationships?.find((pr) => pr.key === fullQueryPath)
-
-    if (payloadRel) {
-      console.log(`[v0]   MATCH: ${fullQueryPath} (has ${payloadRel.relationships?.length || 0} nested)`)
-    }
 
     const selection: RelationshipSelection = {
       id: crypto.randomUUID(),
-      relationshipKey: fullQueryPath, // Store full path for query generation
+      relationshipKey: fullQueryPath,
       relationshipName: rel.name,
       targetType: targetTypeKey,
       targetTypeLabel: targetTypeRaw,
@@ -229,33 +193,22 @@ async function buildRelationshipSelections(
         const filterMap = parseFilterString(payloadRel.filter || "")
         selection.attributes = mapAttributesToSelections(targetTypeData.attributes, payloadRel.attributes, filterMap)
 
-        const nestedResult = await buildRelationshipSelections(
+        selection.nestedRelationships = await buildRelationshipSelections(
           payloadRel.relationships,
           targetTypeData.relationships,
           targetTypeKey,
           prefetchedTypes,
           depth + 1,
         )
-        selection.nestedRelationships = [...nestedResult.forward, ...nestedResult.backward]
-
-        const enabledNested = selection.nestedRelationships.filter((n) => n.enabled)
-        console.log(
-          `[v0]   Built ${selection.nestedRelationships.length} nested for ${fullQueryPath}, ${enabledNested.length} enabled`,
-        )
       }
     }
 
-    if (isForward) {
-      forward.push(selection)
-    } else {
-      backward.push(selection)
-    }
+    results.push(selection)
   }
 
-  return { forward, backward }
+  return results
 }
 
-// Main parser function - converts a query payload into QueryBuilderState
 export async function parseQueryPayload(
   payload: ParsedQueryPayload,
 ): Promise<{ success: boolean; state?: QueryBuilderState; error?: string }> {
@@ -265,19 +218,16 @@ export async function parseQueryPayload(
     const typesToFetch = collectTypeNamesToFetch(rootType, payload.relationships)
     const prefetchedTypes = await prefetchTypeDetails(typesToFetch)
 
-    // Get root type from prefetched data
     const rootTypeData = prefetchedTypes.get(rootType)
     if (!rootTypeData) {
       return { success: false, error: `Failed to fetch type details for ${rootType}` }
     }
 
-    // Parse root filters
     const filterMap = parseFilterString(payload.filter || "")
 
-    // Build attribute selections
     const attributes = mapAttributesToSelections(rootTypeData.attributes, payload.attributes, filterMap)
 
-    const { forward: relationships, backward: backwardRelationships } = await buildRelationshipSelections(
+    const relationships = await buildRelationshipSelections(
       payload.relationships,
       rootTypeData.relationships,
       rootType,
@@ -289,7 +239,6 @@ export async function parseQueryPayload(
       rootTypeLabel: rootTypeData.name,
       attributes,
       relationships,
-      backwardRelationships,
       limit: payload.limit || 10,
       offset: payload.offset || 0,
       isLoading: false,
@@ -302,13 +251,10 @@ export async function parseQueryPayload(
   }
 }
 
-// Extract JSON from cURL command or raw JSON
 export function extractJsonFromInput(input: string): ParsedQueryPayload | null {
   const trimmed = input.trim()
 
-  // If it starts with curl, extract the -d payload
   if (trimmed.toLowerCase().startsWith("curl")) {
-    // Match -d followed by single or double quoted JSON, or unquoted JSON
     const dMatch = trimmed.match(/-d\s+['"]?(\{[\s\S]*\})['"]?\s*$/m)
     if (dMatch) {
       try {
@@ -318,7 +264,6 @@ export function extractJsonFromInput(input: string): ParsedQueryPayload | null {
       }
     }
 
-    // Try matching -d with multiline JSON
     const multilineMatch = trimmed.match(/-d\s+'([\s\S]*?)'/)
     if (multilineMatch) {
       try {
@@ -331,7 +276,6 @@ export function extractJsonFromInput(input: string): ParsedQueryPayload | null {
     return null
   }
 
-  // Try parsing as raw JSON
   try {
     return JSON.parse(trimmed)
   } catch {

@@ -52,11 +52,8 @@ export interface QueryBuilderState {
   // Attributes for root type
   attributes: AttributeSelection[]
 
-  // Relationships from root type
+  // All relationships from root type (direction indicated by 'direction' field)
   relationships: RelationshipSelection[]
-
-  // Backward relationships to root type (we are the "to" side)
-  backwardRelationships?: RelationshipSelection[]
 
   // Pagination
   limit: number

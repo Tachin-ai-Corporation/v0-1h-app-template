@@ -1,18 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import {
-  ChevronDown,
-  ChevronRight,
-  Search,
-  Loader2,
-  Link2,
-  Copy,
-  ArrowRight,
-  ArrowLeft,
-  Repeat,
-  Trash2,
-} from "lucide-react"
+import { ChevronDown, ChevronRight, Search, Loader2, Link2, ArrowRight, ArrowLeft, Repeat, Trash2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -29,7 +18,6 @@ interface TypeBlockProps {
   typeLabel: string
   attributes: AttributeSelection[]
   relationships: RelationshipSelection[]
-  backwardRelationships?: RelationshipSelection[]
   onAttributeChange: (attrKey: string, changes: Partial<AttributeSelection>) => void
   onRelationshipToggle: (relId: string, enabled: boolean) => void
   onRelationshipLimitChange: (relId: string, limit: number) => void
@@ -40,8 +28,7 @@ interface TypeBlockProps {
   onRepeatPattern?: (
     recursiveRelId: string,
     sourceAttributes: AttributeSelection[],
-    sourceForwardRels: RelationshipSelection[],
-    sourceBackwardRels: RelationshipSelection[],
+    sourceRelationships: RelationshipSelection[],
   ) => void
   onDelete?: () => void
   loadingRelationships: Set<string>
@@ -58,12 +45,8 @@ interface TypeBlockProps {
   onOffsetChange?: (offset: number) => void
 }
 
-interface CombinedRelationship extends RelationshipSelection {
-  isBackward: boolean
-}
-
-function groupRelationshipsByTargetType(relationships: CombinedRelationship[]) {
-  const groups: Record<string, CombinedRelationship[]> = {}
+function groupRelationshipsByTargetType(relationships: RelationshipSelection[]) {
+  const groups: Record<string, RelationshipSelection[]> = {}
   for (const rel of relationships) {
     const displayType = rel.targetTypeLabel || rel.targetType
     if (!groups[displayType]) {
@@ -79,7 +62,6 @@ export function TypeBlock({
   typeLabel,
   attributes,
   relationships,
-  backwardRelationships = [],
   onAttributeChange,
   onRelationshipToggle,
   onRelationshipLimitChange,
@@ -102,34 +84,6 @@ export function TypeBlock({
   onLimitChange,
   onOffsetChange,
 }: TypeBlockProps) {
-  useEffect(() => {
-    const selectedAttrs = attributes.filter((a) => a.selected)
-    const filteredAttrs = attributes.filter((a) => a.filterEnabled)
-    const enabledFwdRels = relationships.filter((r) => r.enabled)
-    const enabledBwdRels = backwardRelationships.filter((r) => r.enabled)
-
-    console.groupCollapsed(
-      `[v0] TypeBlock: ${typeName} (depth=${depth}, attrs=${attributes.length}, fwdRels=${relationships.length}, bwdRels=${backwardRelationships.length})`,
-    )
-    console.log(
-      "Selected attributes:",
-      selectedAttrs.map((a) => a.key),
-    )
-    console.log(
-      "Filtered attributes:",
-      filteredAttrs.map((a) => ({ key: a.key, op: a.filterOperator, val: a.filterValue })),
-    )
-    console.log(
-      "Enabled forward relationships:",
-      enabledFwdRels.map((r) => r.relationshipKey),
-    )
-    console.log(
-      "Enabled backward relationships:",
-      enabledBwdRels.map((r) => r.relationshipKey),
-    )
-    console.groupEnd()
-  }, [typeName, depth, attributes, relationships, backwardRelationships])
-
   const [attributesExpanded, setAttributesExpanded] = useState(true)
   const [relationshipsExpanded, setRelationshipsExpanded] = useState(depth === 0)
   const [relationshipSearch, setRelationshipSearch] = useState("")
@@ -160,18 +114,16 @@ export function TypeBlock({
   const selectedAttrCount = useMemo(() => attributes.filter((a) => a.selected).length, [attributes])
   const filterAttrCount = useMemo(() => attributes.filter((a) => a.filterEnabled).length, [attributes])
 
-  const combinedRelationships: CombinedRelationship[] = useMemo(() => {
-    const fwd = relationships.map((r) => ({ ...r, isBackward: false }))
-    const bwd = backwardRelationships.map((r) => ({ ...r, isBackward: true }))
-    return [...fwd, ...bwd].sort((a, b) => {
+  const sortedRelationships = useMemo(() => {
+    return [...relationships].sort((a, b) => {
       const aTarget = a.targetTypeLabel || a.targetType
       const bTarget = b.targetTypeLabel || b.targetType
       return aTarget.localeCompare(bTarget)
     })
-  }, [relationships, backwardRelationships])
+  }, [relationships])
 
   const filteredRelationships = useMemo(() => {
-    return combinedRelationships.filter((rel) => {
+    return sortedRelationships.filter((rel) => {
       if (!relationshipSearch.trim()) return true
       const lower = relationshipSearch.toLowerCase()
       return (
@@ -180,15 +132,14 @@ export function TypeBlock({
         rel.relationshipKey.toLowerCase().includes(lower)
       )
     })
-  }, [combinedRelationships, relationshipSearch])
+  }, [sortedRelationships, relationshipSearch])
 
   const groupedRelationships = useMemo(() => {
     return groupRelationshipsByTargetType(filteredRelationships)
   }, [filteredRelationships])
 
-  const enabledRelCount = useMemo(() => combinedRelationships.filter((r) => r.enabled).length, [combinedRelationships])
-  const enabledRelationships = useMemo(() => combinedRelationships.filter((r) => r.enabled), [combinedRelationships])
-  const hasSelectedAttrs = attributes.some((a) => a.selected || a.filterEnabled)
+  const enabledRelCount = useMemo(() => relationships.filter((r) => r.enabled).length, [relationships])
+  const enabledRelationships = useMemo(() => relationships.filter((r) => r.enabled), [relationships])
 
   const borderColors = [
     "border-l-primary",
@@ -199,29 +150,19 @@ export function TypeBlock({
   ]
   const borderColor = borderColors[depth % borderColors.length]
 
-  const handleRepeatAttributesForRel = (relId: string) => {
-    if (onRepeatAttributes) {
-      onRepeatAttributes([relId], attributes)
-    }
-  }
-
   const recursiveRelationship = useMemo(() => {
-    const fwdRecursive = relationships.find((rel) => rel.targetType === typeName)
-    if (fwdRecursive) return { rel: fwdRecursive, isBackward: false }
-    const bwdRecursive = backwardRelationships.find((rel) => rel.targetType === typeName)
-    if (bwdRecursive) return { rel: bwdRecursive, isBackward: true }
-    return null
-  }, [relationships, backwardRelationships, typeName])
+    return relationships.find((rel) => rel.targetType === typeName) || null
+  }, [relationships, typeName])
 
   const hasConfiguredSettings = useMemo(() => {
     const hasSelectedAttrs = attributes.some((a) => a.selected || a.filterEnabled)
-    const hasEnabledRels = relationships.some((r) => r.enabled) || backwardRelationships.some((r) => r.enabled)
+    const hasEnabledRels = relationships.some((r) => r.enabled)
     return hasSelectedAttrs || hasEnabledRels
-  }, [attributes, relationships, backwardRelationships])
+  }, [attributes, relationships])
 
   const handleRepeatPattern = () => {
     if (recursiveRelationship && onRepeatPattern) {
-      onRepeatPattern(recursiveRelationship.rel.id, attributes, relationships, backwardRelationships)
+      onRepeatPattern(recursiveRelationship.id, attributes, relationships)
     }
   }
 
@@ -357,7 +298,7 @@ export function TypeBlock({
             </CollapsibleContent>
           </Collapsible>
 
-          {combinedRelationships.length > 0 && (
+          {relationships.length > 0 && (
             <Collapsible open={relationshipsExpanded} onOpenChange={setRelationshipsExpanded}>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" className="w-full justify-between p-2 h-auto hover:bg-muted/50">
@@ -376,7 +317,8 @@ export function TypeBlock({
                 <div className="px-2 py-1 text-xs flex flex-wrap gap-1">
                   {enabledRelationships.map((rel) => (
                     <Badge key={rel.id} variant="outline" className="text-xs">
-                      {rel.isBackward ? "←" : "→"} {rel.relationshipName} → {rel.targetTypeLabel || rel.targetType}
+                      {rel.direction === "BACKWARDS" ? "←" : "→"} {rel.relationshipName} →{" "}
+                      {rel.targetTypeLabel || rel.targetType}
                     </Badge>
                   ))}
                 </div>
@@ -429,7 +371,7 @@ export function TypeBlock({
                                 .filter((r) => r.enabled)
                                 .map((rel) => (
                                   <Badge key={rel.id} variant="secondary" className="text-xs">
-                                    {rel.isBackward ? "←" : "→"} {rel.relationshipName}
+                                    {rel.direction === "BACKWARDS" ? "←" : "→"} {rel.relationshipName}
                                   </Badge>
                                 ))}
                             </div>
@@ -440,6 +382,7 @@ export function TypeBlock({
                               {rels.map((rel) => {
                                 const isLoading = loadingRelationships.has(rel.id)
                                 const isRecursive = currentAncestorTypes.includes(rel.targetType)
+                                const isBackward = rel.direction === "BACKWARDS"
                                 return (
                                   <div
                                     key={rel.id}
@@ -452,7 +395,7 @@ export function TypeBlock({
                                         onCheckedChange={(checked) => onRelationshipToggle(rel.id, checked === true)}
                                         disabled={isLoading}
                                       />
-                                      {rel.isBackward ? (
+                                      {isBackward ? (
                                         <ArrowLeft className="h-3 w-3 text-orange-500" />
                                       ) : (
                                         <ArrowRight className="h-3 w-3 text-blue-500" />
@@ -470,79 +413,21 @@ export function TypeBlock({
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      {rel.enabled && isRecursive && hasSelectedAttrs && onRepeatAttributes && (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-7 px-2"
-                                                onClick={() => handleRepeatAttributesForRel(rel.id)}
-                                              >
-                                                <Copy className="h-3 w-3 mr-1" />
-                                                <span className="text-xs">Repeat</span>
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>Copy attribute selections to child type</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )}
-                                      {rel.enabled && (
-                                        <div className="flex items-center gap-2">
-                                          <Label className="text-xs text-muted-foreground">Limit:</Label>
-                                          <Input
-                                            type="number"
-                                            value={rel.limit}
-                                            onChange={(e) =>
-                                              onRelationshipLimitChange(rel.id, Number.parseInt(e.target.value) || 10)
-                                            }
-                                            className="w-16 h-7 text-xs"
-                                            min={1}
-                                          />
-                                        </div>
-                                      )}
-                                    </div>
-                                    {rel.enabled && rel.attributes.length > 0 && (
-                                      <div className="mt-2">
-                                        <TypeBlock
-                                          typeName={rel.targetType}
-                                          typeLabel={rel.targetTypeLabel || rel.targetType}
-                                          attributes={rel.attributes}
-                                          relationships={rel.nestedRelationships.filter(
-                                            (nr) => nr.direction !== "BACKWARDS",
-                                          )}
-                                          backwardRelationships={rel.nestedRelationships.filter(
-                                            (nr) => nr.direction === "BACKWARDS",
-                                          )}
-                                          onAttributeChange={(attrKey, changes) =>
-                                            onRelationshipAttributeChange([...parentRelPath, rel.id], attrKey, changes)
+                                    {rel.enabled && (
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor={`${idPrefix}rel-${rel.id}-limit`} className="text-xs">
+                                          Limit:
+                                        </Label>
+                                        <Input
+                                          id={`${idPrefix}rel-${rel.id}-limit`}
+                                          type="number"
+                                          min={1}
+                                          max={1000}
+                                          value={rel.limit}
+                                          onChange={(e) =>
+                                            onRelationshipLimitChange(rel.id, Number.parseInt(e.target.value) || 10)
                                           }
-                                          onRelationshipToggle={(nestedRelId, enabled) =>
-                                            onNestedRelationshipToggle([...parentRelPath, rel.id, nestedRelId], enabled)
-                                          }
-                                          onRelationshipLimitChange={(nestedRelId, limit) =>
-                                            onNestedRelationshipLimitChange(
-                                              [...parentRelPath, rel.id, nestedRelId],
-                                              limit,
-                                            )
-                                          }
-                                          onRelationshipAttributeChange={onRelationshipAttributeChange}
-                                          onNestedRelationshipToggle={onNestedRelationshipToggle}
-                                          onNestedRelationshipLimitChange={onNestedRelationshipLimitChange}
-                                          onRepeatAttributes={onRepeatAttributes}
-                                          onRepeatPattern={onRepeatPattern}
-                                          onDelete={() => onRelationshipToggle(rel.id, false)}
-                                          loadingRelationships={loadingRelationships}
-                                          depth={depth + 1}
-                                          relationshipPath={rel.relationshipName}
-                                          idPrefix={`${idPrefix}${rel.id}-`}
-                                          parentRelPath={[...parentRelPath, rel.id]}
-                                          ancestorTypes={currentAncestorTypes}
-                                          collapseSignal={collapseSignal}
+                                          className="h-7 w-16 text-xs"
                                         />
                                       </div>
                                     )}
@@ -555,12 +440,6 @@ export function TypeBlock({
                       )
                     })}
                 </div>
-
-                {filteredRelationships.length === 0 && relationshipSearch && (
-                  <div className="text-center text-muted-foreground py-4 text-sm">
-                    No relationships match "{relationshipSearch}"
-                  </div>
-                )}
               </CollapsibleContent>
             </Collapsible>
           )}
@@ -570,23 +449,14 @@ export function TypeBlock({
       {/* Render enabled relationships as nested TypeBlocks */}
       {enabledRelationships.map((rel) => {
         const currentRelPath = [...parentRelPath, rel.id]
-        // Get the source arrays for forward vs backward relationships
-        const sourceRels = rel.isBackward ? backwardRelationships : relationships
-        const actualRel = sourceRels.find((r) => r.id === rel.id)
-        if (!actualRel) return null
-
-        // Split nested relationships back into forward and backward for the child
-        const childForwardRels = actualRel.nestedRelationships.filter((r) => r.direction === "FORWARD")
-        const childBackwardRels = actualRel.nestedRelationships.filter((r) => r.direction === "BACKWARDS")
 
         return (
           <TypeBlock
             key={rel.id}
             typeName={rel.targetType}
             typeLabel={rel.targetTypeLabel || rel.targetType}
-            attributes={actualRel.attributes}
-            relationships={childForwardRels}
-            backwardRelationships={childBackwardRels}
+            attributes={rel.attributes}
+            relationships={rel.nestedRelationships}
             onAttributeChange={(attrKey, changes) => onRelationshipAttributeChange(currentRelPath, attrKey, changes)}
             onRelationshipToggle={(nestedRelId, enabled) =>
               onNestedRelationshipToggle([...currentRelPath, nestedRelId], enabled)
@@ -602,7 +472,7 @@ export function TypeBlock({
             onDelete={() => onRelationshipToggle(rel.id, false)}
             loadingRelationships={loadingRelationships}
             depth={depth + 1}
-            relationshipPath={rel.relationshipKey}
+            relationshipPath={rel.relationshipName}
             idPrefix={`${idPrefix}${rel.id}-`}
             parentRelPath={currentRelPath}
             ancestorTypes={currentAncestorTypes}

@@ -13,6 +13,15 @@ import { executeQuery } from "@/lib/api/query"
 import { buildQueryRequest } from "@/lib/utils/query-generator"
 import { parseQueryPayload, extractJsonFromInput } from "@/lib/utils/query-parser"
 import {
+  findRelationshipByPath,
+  findRelationshipById,
+  updateRelationshipAtPath,
+  updateRelationshipAttribute,
+  deleteRelationshipAtPath,
+  copyAttributeSettings,
+  copyRelationshipSettings,
+} from "@/lib/utils/relationship-tree"
+import {
   createInitialQueryBuilderState,
   createAttributeSelection,
   getBaselineAttributeSelections,
@@ -37,9 +46,7 @@ function mapRelationshipToSelection(rel: TypeRelationship, currentType: string):
   const targetTypeKey = targetTypeRaw.replace(/\s+/g, "")
   const currentTypeKey = currentType.replace(/\s+/g, "")
 
-  const queryPath = isForward
-    ? `${currentTypeKey}.${rel.relKey}.${targetTypeKey}`
-    : `${targetTypeKey}.${rel.relKey}.${currentTypeKey}`
+  const queryPath = `${currentTypeKey}.${rel.relKey}.${targetTypeKey}`
 
   return {
     id: crypto.randomUUID(),
@@ -93,21 +100,16 @@ export function QueryBuilder() {
       const typeAttrs: AttributeSelection[] = typeData.attributes.map(mapAttributeToSelection)
       const attributes: AttributeSelection[] = [...baselineAttrs, ...typeAttrs]
 
-      const forwardRelationships: RelationshipSelection[] = typeData.relationships
-        .filter((rel) => rel.direction === "FORWARD")
-        .map((rel) => mapRelationshipToSelection(rel, typeKey))
-
-      const backwardRelationships: RelationshipSelection[] = typeData.relationships
-        .filter((rel) => rel.direction === "BACKWARDS")
-        .map((rel) => mapRelationshipToSelection(rel, typeKey))
+      const allRelationships: RelationshipSelection[] = typeData.relationships.map((rel) =>
+        mapRelationshipToSelection(rel, typeKey),
+      )
 
       setState({
         ...createInitialQueryBuilderState(),
         rootType: typeKey,
         rootTypeLabel: typeData.name,
         attributes,
-        relationships: forwardRelationships,
-        backwardRelationships: backwardRelationships,
+        relationships: allRelationships,
       })
     } else {
       setState({
@@ -146,192 +148,66 @@ export function QueryBuilder() {
   }, [state])
 
   const handleAttributeChange = useCallback((attrKey: string, changes: Partial<AttributeSelection>) => {
-    console.log(`[v0] handleAttributeChange called: ${attrKey}`, changes)
-    setState((prev) => {
-      const newAttrs = prev.attributes.map((attr) => {
-        if (attr.key === attrKey) {
-          console.log(`[v0] Updating attr ${attrKey}:`, { ...attr, ...changes })
-          return { ...attr, ...changes }
-        }
-        return attr
-      })
-      return { ...prev, attributes: newAttrs }
-    })
+    setState((prev) => ({
+      ...prev,
+      attributes: prev.attributes.map((attr) => (attr.key === attrKey ? { ...attr, ...changes } : attr)),
+    }))
   }, [])
 
-  const updateNestedRelationshipAttribute = useCallback(
-    (
-      relationships: RelationshipSelection[],
-      path: string[],
-      attrKey: string,
-      changes: Partial<AttributeSelection>,
-    ): RelationshipSelection[] => {
-      if (path.length === 0) return relationships
-
-      const [currentRelId, ...restPath] = path
-
-      return relationships.map((rel) => {
-        if (rel.id !== currentRelId) return rel
-
-        if (restPath.length === 0) {
-          return {
-            ...rel,
-            attributes: rel.attributes.map((attr) => (attr.key === attrKey ? { ...attr, ...changes } : attr)),
-          }
-        } else {
-          return {
-            ...rel,
-            nestedRelationships: updateNestedRelationshipAttribute(rel.nestedRelationships, restPath, attrKey, changes),
-          }
-        }
-      })
+  const handleRelationshipAttributeChange = useCallback(
+    (relPath: string[], attrKey: string, changes: Partial<AttributeSelection>) => {
+      setState((prev) => ({
+        ...prev,
+        relationships: updateRelationshipAttribute(prev.relationships, relPath, attrKey, changes),
+      }))
     },
     [],
   )
 
-  const handleRelationshipAttributeChange = useCallback(
-    (relPath: string[], attrKey: string, changes: Partial<AttributeSelection>) => {
-      console.log(`[v0] handleRelationshipAttributeChange: path=${relPath.join(".")}, attr=${attrKey}`, changes)
-      setState((prev) => ({
-        ...prev,
-        relationships: updateNestedRelationshipAttribute(prev.relationships, relPath, attrKey, changes),
-        backwardRelationships: updateNestedRelationshipAttribute(
-          prev.backwardRelationships || [],
-          relPath,
-          attrKey,
-          changes,
-        ),
-      }))
-    },
-    [updateNestedRelationshipAttribute],
-  )
-
   const handleRelationshipToggle = useCallback(async (relPath: string[], enabled: boolean) => {
     const relId = relPath[relPath.length - 1]
-    console.log(`[v0] handleRelationshipToggle: path=${relPath.join(".")}, enabled=${enabled}`)
 
-    const findRelationship = (relationships: RelationshipSelection[], path: string[]): RelationshipSelection | null => {
-      console.log(`[v0] findRelationship: searching path [${path.join(", ")}] in ${relationships.length} rels`)
-      if (path.length === 0) return null
-      const [currentId, ...rest] = path
-      const rel = relationships.find((r) => r.id === currentId)
-      if (!rel) {
-        console.log(
-          `[v0] findRelationship: NOT FOUND id=${currentId}, available: [${relationships.map((r) => `${r.relationshipName}:${r.id}`).join(", ")}]`,
-        )
-        return null
-      }
-      console.log(
-        `[v0] findRelationship: found ${rel.relationshipName}, attrs=${rel.attributes.length}, nested=${rel.nestedRelationships.length}`,
-      )
-      if (rest.length === 0) {
-        return rel
-      }
-      return findRelationship(rel.nestedRelationships, rest)
-    }
-
-    const updateRelationship = (
-      relationships: RelationshipSelection[],
-      path: string[],
-      update: Partial<RelationshipSelection>,
-    ): RelationshipSelection[] => {
-      if (path.length === 0) return relationships
-      const [currentId, ...rest] = path
-
-      return relationships.map((rel) => {
-        if (rel.id !== currentId) return rel
-        if (rest.length === 0) {
-          console.log(`[v0] updateRelationship: updating ${rel.relationshipName}`, Object.keys(update))
-          return { ...rel, ...update }
-        }
-        return {
-          ...rel,
-          nestedRelationships: updateRelationship(rel.nestedRelationships, rest, update),
-        }
-      })
-    }
-
-    const getRelationshipFromCurrentState = (): Promise<{
-      relationship: RelationshipSelection | null
-      isBackward: boolean
-    }> => {
+    const getRelationshipFromCurrentState = (): Promise<RelationshipSelection | null> => {
       return new Promise((resolve) => {
         setState((currentState) => {
-          let rel = findRelationship(currentState.relationships, relPath)
-          if (rel) {
-            resolve({ relationship: rel, isBackward: false })
-            return currentState
-          }
-          rel = findRelationship(currentState.backwardRelationships || [], relPath)
-          resolve({ relationship: rel, isBackward: true })
+          const rel = findRelationshipByPath(currentState.relationships, relPath)
+          resolve(rel)
           return currentState
         })
       })
     }
 
-    const { relationship, isBackward } = await getRelationshipFromCurrentState()
+    const relationship = await getRelationshipFromCurrentState()
 
-    if (!relationship) {
-      console.log(`[v0] handleRelationshipToggle: relationship not found in path ${relPath.join(".")}`)
-      return
-    }
-
-    console.log(
-      `[v0] handleRelationshipToggle: found relationship ${relationship.relationshipName}, targetType=${relationship.targetType}, currentAttrs=${relationship.attributes.length}, isBackward=${isBackward}`,
-    )
+    if (!relationship) return
 
     if (enabled && relationship.attributes.length === 0) {
       setLoadingRelationships((prev) => new Set(prev).add(relId))
-      console.log(`[v0] handleRelationshipToggle: fetching type details for ${relationship.targetType}`)
 
       const targetType = relationship.targetType
       const result = await fetchTypeDetails(targetType)
-      console.log(`[v0] handleRelationshipToggle: fetchTypeDetails result`, result.success, result.error)
 
       if (result.success && result.data) {
         const baselineAttrs = getBaselineAttributeSelections()
         const typeAttrs: AttributeSelection[] = result.data.attributes.map(mapAttributeToSelection)
         const attributes: AttributeSelection[] = [...baselineAttrs, ...typeAttrs]
 
-        const forwardNestedRels: RelationshipSelection[] = result.data.relationships
-          .filter((rel) => rel.direction === "FORWARD")
-          .map((rel) => mapRelationshipToSelection(rel, targetType))
-
-        const backwardNestedRels: RelationshipSelection[] = result.data.relationships
-          .filter((rel) => rel.direction === "BACKWARDS")
-          .map((rel) => mapRelationshipToSelection(rel, targetType))
-
-        const nestedRelationships: RelationshipSelection[] = [...forwardNestedRels, ...backwardNestedRels]
-
-        console.log(
-          `[v0] handleRelationshipToggle: loaded ${attributes.length} attrs, ${nestedRelationships.length} rels (${forwardNestedRels.length} forward, ${backwardNestedRels.length} backward) for ${relationship.relationshipName}`,
+        const nestedRelationships: RelationshipSelection[] = result.data.relationships.map((rel) =>
+          mapRelationshipToSelection(rel, targetType),
         )
 
         setState((prev) => ({
           ...prev,
-          relationships: isBackward
-            ? prev.relationships
-            : updateRelationship(prev.relationships, relPath, {
-                enabled: true,
-                attributes,
-                nestedRelationships,
-              }),
-          backwardRelationships: isBackward
-            ? updateRelationship(prev.backwardRelationships || [], relPath, {
-                enabled: true,
-                attributes,
-                nestedRelationships,
-              })
-            : prev.backwardRelationships || [],
+          relationships: updateRelationshipAtPath(prev.relationships, relPath, {
+            enabled: true,
+            attributes,
+            nestedRelationships,
+          }),
         }))
       } else {
-        console.log(`[v0] handleRelationshipToggle: fetchTypeDetails failed, only setting enabled`)
         setState((prev) => ({
           ...prev,
-          relationships: isBackward ? prev.relationships : updateRelationship(prev.relationships, relPath, { enabled }),
-          backwardRelationships: isBackward
-            ? updateRelationship(prev.backwardRelationships || [], relPath, { enabled })
-            : prev.backwardRelationships || [],
+          relationships: updateRelationshipAtPath(prev.relationships, relPath, { enabled }),
         }))
       }
 
@@ -341,43 +217,17 @@ export function QueryBuilder() {
         return next
       })
     } else {
-      console.log(
-        `[v0] handleRelationshipToggle: not fetching (enabled=${enabled}, attrsLen=${relationship.attributes.length})`,
-      )
       setState((prev) => ({
         ...prev,
-        relationships: isBackward ? prev.relationships : updateRelationship(prev.relationships, relPath, { enabled }),
-        backwardRelationships: isBackward
-          ? updateRelationship(prev.backwardRelationships || [], relPath, { enabled })
-          : prev.backwardRelationships || [],
+        relationships: updateRelationshipAtPath(prev.relationships, relPath, { enabled }),
       }))
     }
   }, [])
 
   const handleRelationshipLimitChange = useCallback((relPath: string[], limit: number) => {
-    const updateRelationshipLimit = (
-      relationships: RelationshipSelection[],
-      path: string[],
-    ): RelationshipSelection[] => {
-      if (path.length === 0) return relationships
-      const [currentId, ...rest] = path
-
-      return relationships.map((rel) => {
-        if (rel.id !== currentId) return rel
-        if (rest.length === 0) {
-          return { ...rel, limit }
-        }
-        return {
-          ...rel,
-          nestedRelationships: updateRelationshipLimit(rel.nestedRelationships, rest),
-        }
-      })
-    }
-
     setState((prev) => ({
       ...prev,
-      relationships: updateRelationshipLimit(prev.relationships, relPath),
-      backwardRelationships: updateRelationshipLimit(prev.backwardRelationships || [], relPath),
+      relationships: updateRelationshipAtPath(prev.relationships, relPath, { limit }),
     }))
   }, [])
 
@@ -411,218 +261,61 @@ export function QueryBuilder() {
   const queryRequest = buildQueryRequest(state)
 
   const handleRepeatAttributes = useCallback((relPath: string[], sourceAttributes: AttributeSelection[]) => {
-    console.log(`[v0] handleRepeatAttributes: path=${relPath.join(".")}, sourceAttrs=${sourceAttributes.length}`)
-
-    const updateRelationshipAttributes = (
-      relationships: RelationshipSelection[],
-      path: string[],
-    ): RelationshipSelection[] => {
-      if (path.length === 0) return relationships
-      const [currentId, ...rest] = path
-
-      return relationships.map((rel) => {
-        if (rel.id !== currentId) return rel
-
-        if (rest.length === 0) {
-          const updatedAttributes = rel.attributes.map((attr) => {
-            const sourceAttr = sourceAttributes.find((sa) => sa.key === attr.key)
-            if (sourceAttr) {
-              return {
-                ...attr,
-                selected: sourceAttr.selected,
-                filterEnabled: sourceAttr.filterEnabled,
-                filterOperator: sourceAttr.filterOperator,
-                filterValue: sourceAttr.filterValue,
-              }
-            }
-            return attr
-          })
-          console.log(
-            `[v0] handleRepeatAttributes: updated ${updatedAttributes.filter((a) => a.selected).length} selected attrs`,
-          )
-          return { ...rel, attributes: updatedAttributes }
-        }
-
-        return {
-          ...rel,
-          nestedRelationships: updateRelationshipAttributes(rel.nestedRelationships, rest),
-        }
-      })
-    }
-
-    setState((prev) => ({
-      ...prev,
-      relationships: updateRelationshipAttributes(prev.relationships, relPath),
-      backwardRelationships: updateRelationshipAttributes(prev.backwardRelationships || [], relPath),
-    }))
+    setState((prev) => {
+      const rel = findRelationshipByPath(prev.relationships, relPath)
+      if (!rel) return prev
+      
+      const updatedAttributes = copyAttributeSettings(rel.attributes, sourceAttributes)
+      return {
+        ...prev,
+        relationships: updateRelationshipAtPath(prev.relationships, relPath, { attributes: updatedAttributes }),
+      }
+    })
   }, [])
 
   const handleRepeatPattern = useCallback(
     async (
       recursiveRelId: string,
       sourceAttributes: AttributeSelection[],
-      sourceForwardRels: RelationshipSelection[],
-      sourceBackwardRels: RelationshipSelection[],
+      sourceRelationships: RelationshipSelection[],
     ) => {
-      console.log(
-        `[v0] handleRepeatPattern: recursiveRelId=${recursiveRelId}, attrs=${sourceAttributes.length}, fwdRels=${sourceForwardRels.length}, bwdRels=${sourceBackwardRels.length}`,
-      )
-
-      const findRelationshipById = (
-        relationships: RelationshipSelection[],
-        id: string,
-      ): { rel: RelationshipSelection; path: string[]; isBackward: boolean } | null => {
-        for (const rel of relationships) {
-          if (rel.id === id) {
-            return { rel, path: [id], isBackward: rel.direction === "BACKWARDS" }
-          }
-          const nested = findRelationshipById(rel.nestedRelationships, id)
-          if (nested) {
-            return { ...nested, path: [rel.id, ...nested.path] }
-          }
-        }
-        return null
-      }
-
-      let found = findRelationshipById(state.relationships, recursiveRelId)
-      let searchedBackward = false
-      if (!found) {
-        found = findRelationshipById(state.backwardRelationships || [], recursiveRelId)
-        searchedBackward = true
-      }
-
-      if (!found) {
-        console.log(`[v0] handleRepeatPattern: relationship ${recursiveRelId} not found`)
-        return
-      }
+      const found = findRelationshipById(state.relationships, recursiveRelId)
+      if (!found) return
 
       const { rel: recursiveRel, path: relPath } = found
-      console.log(`[v0] handleRepeatPattern: found relationship at path [${relPath.join(", ")}]`)
 
       if (!recursiveRel.enabled) {
         await handleRelationshipToggle(relPath, true)
       }
 
-      const copyAttributeSettings = (
-        targetAttrs: AttributeSelection[],
-        sourceAttrs: AttributeSelection[],
-      ): AttributeSelection[] => {
-        return targetAttrs.map((attr) => {
-          const sourceAttr = sourceAttrs.find((sa) => sa.key === attr.key)
-          if (sourceAttr) {
-            return {
-              ...attr,
-              selected: sourceAttr.selected,
-              filterEnabled: sourceAttr.filterEnabled,
-              filterOperator: sourceAttr.filterOperator,
-              filterValue: sourceAttr.filterValue,
-              filterValueEnd: sourceAttr.filterValueEnd,
-            }
-          }
-          return attr
-        })
-      }
-
-      const copyRelationshipSettings = (
-        targetRels: RelationshipSelection[],
-        sourceRels: RelationshipSelection[],
-      ): RelationshipSelection[] => {
-        return targetRels.map((targetRel) => {
-          const sourceRel = sourceRels.find(
-            (sr) =>
-              sr.relationshipKey === targetRel.relationshipKey || sr.relationshipName === targetRel.relationshipName,
-          )
-          if (sourceRel && sourceRel.enabled) {
-            return {
-              ...targetRel,
-              enabled: true,
-              limit: sourceRel.limit,
-            }
-          }
-          return targetRel
-        })
-      }
-
       await new Promise((resolve) => setTimeout(resolve, 100))
 
       setState((prev) => {
-        const updateRelationshipInTree = (
-          relationships: RelationshipSelection[],
-          path: string[],
-        ): RelationshipSelection[] => {
-          if (path.length === 0) return relationships
-          const [currentId, ...rest] = path
+        const rel = findRelationshipByPath(prev.relationships, relPath)
+        if (!rel) return prev
 
-          return relationships.map((rel) => {
-            if (rel.id !== currentId) return rel
-
-            if (rest.length === 0) {
-              const updatedAttrs = copyAttributeSettings(rel.attributes, sourceAttributes)
-              const updatedNestedFwd = copyRelationshipSettings(
-                rel.nestedRelationships.filter((r) => r.direction === "FORWARD"),
-                sourceForwardRels,
-              )
-              const updatedNestedBwd = copyRelationshipSettings(
-                rel.nestedRelationships.filter((r) => r.direction === "BACKWARDS"),
-                sourceBackwardRels,
-              )
-
-              console.log(
-                `[v0] handleRepeatPattern: updating ${rel.relationshipName} with ${updatedAttrs.filter((a) => a.selected).length} selected attrs`,
-              )
-
-              return {
-                ...rel,
-                attributes: updatedAttrs,
-                nestedRelationships: [...updatedNestedFwd, ...updatedNestedBwd],
-              }
-            }
-
-            return {
-              ...rel,
-              nestedRelationships: updateRelationshipInTree(rel.nestedRelationships, rest),
-            }
-          })
-        }
+        const updatedAttributes = copyAttributeSettings(rel.attributes, sourceAttributes)
+        const updatedNestedRels = copyRelationshipSettings(rel.nestedRelationships, sourceRelationships)
 
         return {
           ...prev,
-          relationships: searchedBackward ? prev.relationships : updateRelationshipInTree(prev.relationships, relPath),
-          backwardRelationships: searchedBackward
-            ? updateRelationshipInTree(prev.backwardRelationships || [], relPath)
-            : prev.backwardRelationships || [],
+          relationships: updateRelationshipAtPath(prev.relationships, relPath, {
+            attributes: updatedAttributes,
+            nestedRelationships: updatedNestedRels,
+          }),
         }
       })
 
-      const enabledSourceFwd = sourceForwardRels.filter((r) => r.enabled && r.targetType !== recursiveRel.targetType)
-      const enabledSourceBwd = sourceBackwardRels.filter((r) => r.enabled && r.targetType !== recursiveRel.targetType)
+      const enabledSourceRels = sourceRelationships.filter((r) => r.enabled && r.targetType !== recursiveRel.targetType)
 
-      for (const srcRel of [...enabledSourceFwd, ...enabledSourceBwd]) {
+      for (const srcRel of enabledSourceRels) {
         setState((prev) => {
-          const findMatchingRelInTarget = (relationships: RelationshipSelection[], path: string[]): string | null => {
-            if (path.length === 0) return null
-            const [currentId, ...rest] = path
+          const rel = findRelationshipByPath(prev.relationships, relPath)
+          const match = rel?.nestedRelationships.find((nr) => nr.relationshipName === srcRel.relationshipName)
 
-            for (const rel of relationships) {
-              if (rel.id !== currentId) continue
-
-              if (rest.length === 0) {
-                const match = rel.nestedRelationships.find((nr) => nr.relationshipName === srcRel.relationshipName)
-                return match?.id || null
-              }
-
-              return findMatchingRelInTarget(rel.nestedRelationships, rest)
-            }
-            return null
-          }
-
-          const matchId = searchedBackward
-            ? findMatchingRelInTarget(prev.backwardRelationships || [], relPath)
-            : findMatchingRelInTarget(prev.relationships, relPath)
-
-          if (matchId) {
+          if (match) {
             setTimeout(() => {
-              handleRelationshipToggle([...relPath, matchId], true)
+              handleRelationshipToggle([...relPath, match.id], true)
             }, 50)
           }
 
@@ -630,49 +323,13 @@ export function QueryBuilder() {
         })
       }
     },
-    [state.relationships, state.backwardRelationships, handleRelationshipToggle],
+    [state.relationships, handleRelationshipToggle],
   )
 
   const handleDeleteRelationship = useCallback((relPath: string[]) => {
-    console.log(`[v0] handleDeleteRelationship: path=${relPath.join(".")}`)
-
-    const deleteRelationshipInTree = (
-      relationships: RelationshipSelection[],
-      path: string[],
-    ): RelationshipSelection[] => {
-      if (path.length === 0) return relationships
-      const [currentId, ...rest] = path
-
-      // If this is the last ID in the path, filter it out (delete it)
-      if (rest.length === 0) {
-        return relationships.map((rel) => {
-          if (rel.id === currentId) {
-            // Disable the relationship and clear its nested data
-            return {
-              ...rel,
-              enabled: false,
-              attributes: [],
-              nestedRelationships: [],
-            }
-          }
-          return rel
-        })
-      }
-
-      // Otherwise, recurse into nested relationships
-      return relationships.map((rel) => {
-        if (rel.id !== currentId) return rel
-        return {
-          ...rel,
-          nestedRelationships: deleteRelationshipInTree(rel.nestedRelationships, rest),
-        }
-      })
-    }
-
     setState((prev) => ({
       ...prev,
-      relationships: deleteRelationshipInTree(prev.relationships, relPath),
-      backwardRelationships: deleteRelationshipInTree(prev.backwardRelationships || [], relPath),
+      relationships: deleteRelationshipAtPath(prev.relationships, relPath),
     }))
   }, [])
 
@@ -681,111 +338,88 @@ export function QueryBuilder() {
   }, [])
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex-shrink-0 px-6 py-4 border-b bg-background">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Database className="h-6 w-6 text-primary" />
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-semibold">Query Builder</h1>
-              <p className="text-sm text-muted-foreground">Build and test 1health /query requests</p>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5" />
+                Select Root Type
+              </CardTitle>
+              <CardDescription>Choose a type to query and configure attributes and relationships</CardDescription>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {state.rootType && (
-              <Button variant="outline" size="sm" onClick={handleCollapseAll}>
+            <div className="flex items-center gap-2">
+              <ImportQueryDialog onImport={handleImportQuery} />
+              <Button variant="outline" size="sm" onClick={handleCollapseAll} title="Collapse all sections">
                 <ChevronsDownUp className="h-4 w-4 mr-2" />
                 Collapse All
               </Button>
-            )}
-            <ImportQueryDialog onImport={handleImportQuery} disabled={typesLoading} />
-            <Button onClick={() => setTestPanelOpen(true)} disabled={!state.rootType}>
-              <Play className="h-4 w-4 mr-2" />
-              Test Query
-            </Button>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardHeader>
+        <CardContent>
+          <TypeSelector
+            types={types}
+            selectedType={state.rootType}
+            onTypeChange={handleTypeChange}
+            isLoading={typesLoading || typeLoading}
+          />
+        </CardContent>
+      </Card>
 
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="space-y-4 w-full">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Select Root Type</CardTitle>
-              <CardDescription>Choose the starting type for your query</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TypeSelector
-                types={types}
-                selectedType={state.rootType}
-                onTypeChange={handleTypeChange}
-                isLoading={typesLoading}
-                disabled={typeLoading}
-              />
-            </CardContent>
-          </Card>
+      {state.rootType && (
+        <TypeBlock
+          typeName={state.rootType}
+          typeLabel={state.rootTypeLabel || state.rootType}
+          attributes={state.attributes}
+          relationships={state.relationships}
+          onAttributeChange={handleAttributeChange}
+          onRelationshipToggle={(relId, enabled) => handleRelationshipToggle([relId], enabled)}
+          onRelationshipLimitChange={(relId, limit) => handleRelationshipLimitChange([relId], limit)}
+          onRelationshipAttributeChange={handleRelationshipAttributeChange}
+          onNestedRelationshipToggle={handleRelationshipToggle}
+          onNestedRelationshipLimitChange={handleRelationshipLimitChange}
+          onRepeatAttributes={handleRepeatAttributes}
+          onRepeatPattern={handleRepeatPattern}
+          loadingRelationships={loadingRelationships}
+          idPrefix="root-"
+          collapseSignal={collapseKey}
+          isRoot={true}
+          limit={state.limit}
+          offset={state.offset}
+          onLimitChange={handleLimitChange}
+          onOffsetChange={handleOffsetChange}
+        />
+      )}
 
-          {state.rootType && !typeLoading && (
-            <TypeBlock
-              key={`typeblock-${state.rootType}`}
-              typeName={state.rootType}
-              typeLabel={state.rootTypeLabel || state.rootType}
-              attributes={state.attributes}
-              relationships={state.relationships}
-              backwardRelationships={state.backwardRelationships || []}
-              onAttributeChange={handleAttributeChange}
-              onRelationshipToggle={(relId, enabled) => handleRelationshipToggle([relId], enabled)}
-              onRelationshipLimitChange={(relId, limit) => handleRelationshipLimitChange([relId], limit)}
-              onRelationshipAttributeChange={(relPath, attrKey, changes) =>
-                handleRelationshipAttributeChange(relPath, attrKey, changes)
-              }
-              onNestedRelationshipToggle={(relPath, enabled) => handleRelationshipToggle(relPath, enabled)}
-              onNestedRelationshipLimitChange={(relPath, limit) => handleRelationshipLimitChange(relPath, limit)}
-              onRepeatAttributes={handleRepeatAttributes}
-              onRepeatPattern={handleRepeatPattern}
-              onDeleteRelationship={handleDeleteRelationship}
-              loadingRelationships={loadingRelationships}
-              depth={0}
-              idPrefix="root-"
-              ancestorTypes={[]}
-              collapseSignal={collapseKey}
-              isRoot={true}
-              limit={state.limit}
-              offset={state.offset}
-              onLimitChange={handleLimitChange}
-              onOffsetChange={handleOffsetChange}
-            />
-          )}
-
-          {typeLoading && (
-            <Card>
-              <CardContent className="py-8">
-                <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  Loading type details...
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {state.error && (
-            <Card className="border-destructive">
-              <CardContent className="py-4">
-                <p className="text-destructive text-sm">{state.error}</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      {state.rootType && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={handleExecute}
+                disabled={isExecuting || !queryRequest}
+                className="flex items-center gap-2"
+              >
+                <Play className="h-4 w-4" />
+                {isExecuting ? "Executing..." : "Execute Query"}
+              </Button>
+              <Button variant="outline" onClick={() => setTestPanelOpen(true)}>
+                View Query JSON
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <TestPanel
         open={testPanelOpen}
         onOpenChange={setTestPanelOpen}
-        request={queryRequest}
-        onExecute={handleExecute}
-        isExecuting={isExecuting}
+        queryRequest={queryRequest}
         results={results}
         error={queryError}
+        isExecuting={isExecuting}
       />
     </div>
   )
