@@ -459,13 +459,188 @@ export function QueryBuilder() {
     }))
   }, [])
 
+  const handleRepeatPattern = useCallback(
+    async (
+      recursiveRelId: string,
+      sourceAttributes: AttributeSelection[],
+      sourceForwardRels: RelationshipSelection[],
+      sourceBackwardRels: RelationshipSelection[],
+    ) => {
+      console.log(
+        `[v0] handleRepeatPattern: recursiveRelId=${recursiveRelId}, attrs=${sourceAttributes.length}, fwdRels=${sourceForwardRels.length}, bwdRels=${sourceBackwardRels.length}`,
+      )
+
+      const findRelationshipById = (
+        relationships: RelationshipSelection[],
+        id: string,
+      ): { rel: RelationshipSelection; path: string[]; isBackward: boolean } | null => {
+        for (const rel of relationships) {
+          if (rel.id === id) {
+            return { rel, path: [id], isBackward: rel.direction === "BACKWARDS" }
+          }
+          const nested = findRelationshipById(rel.nestedRelationships, id)
+          if (nested) {
+            return { ...nested, path: [rel.id, ...nested.path] }
+          }
+        }
+        return null
+      }
+
+      let found = findRelationshipById(state.relationships, recursiveRelId)
+      let searchedBackward = false
+      if (!found) {
+        found = findRelationshipById(state.backwardRelationships || [], recursiveRelId)
+        searchedBackward = true
+      }
+
+      if (!found) {
+        console.log(`[v0] handleRepeatPattern: relationship ${recursiveRelId} not found`)
+        return
+      }
+
+      const { rel: recursiveRel, path: relPath } = found
+      console.log(`[v0] handleRepeatPattern: found relationship at path [${relPath.join(", ")}]`)
+
+      if (!recursiveRel.enabled) {
+        await handleRelationshipToggle(relPath, true)
+      }
+
+      const copyAttributeSettings = (
+        targetAttrs: AttributeSelection[],
+        sourceAttrs: AttributeSelection[],
+      ): AttributeSelection[] => {
+        return targetAttrs.map((attr) => {
+          const sourceAttr = sourceAttrs.find((sa) => sa.key === attr.key)
+          if (sourceAttr) {
+            return {
+              ...attr,
+              selected: sourceAttr.selected,
+              filterEnabled: sourceAttr.filterEnabled,
+              filterOperator: sourceAttr.filterOperator,
+              filterValue: sourceAttr.filterValue,
+              filterValueEnd: sourceAttr.filterValueEnd,
+            }
+          }
+          return attr
+        })
+      }
+
+      const copyRelationshipSettings = (
+        targetRels: RelationshipSelection[],
+        sourceRels: RelationshipSelection[],
+      ): RelationshipSelection[] => {
+        return targetRels.map((targetRel) => {
+          const sourceRel = sourceRels.find(
+            (sr) =>
+              sr.relationshipKey === targetRel.relationshipKey || sr.relationshipName === targetRel.relationshipName,
+          )
+          if (sourceRel && sourceRel.enabled) {
+            return {
+              ...targetRel,
+              enabled: true,
+              limit: sourceRel.limit,
+            }
+          }
+          return targetRel
+        })
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      setState((prev) => {
+        const updateRelationshipInTree = (
+          relationships: RelationshipSelection[],
+          path: string[],
+        ): RelationshipSelection[] => {
+          if (path.length === 0) return relationships
+          const [currentId, ...rest] = path
+
+          return relationships.map((rel) => {
+            if (rel.id !== currentId) return rel
+
+            if (rest.length === 0) {
+              const updatedAttrs = copyAttributeSettings(rel.attributes, sourceAttributes)
+              const updatedNestedFwd = copyRelationshipSettings(
+                rel.nestedRelationships.filter((r) => r.direction === "FORWARD"),
+                sourceForwardRels,
+              )
+              const updatedNestedBwd = copyRelationshipSettings(
+                rel.nestedRelationships.filter((r) => r.direction === "BACKWARDS"),
+                sourceBackwardRels,
+              )
+
+              console.log(
+                `[v0] handleRepeatPattern: updating ${rel.relationshipName} with ${updatedAttrs.filter((a) => a.selected).length} selected attrs`,
+              )
+
+              return {
+                ...rel,
+                attributes: updatedAttrs,
+                nestedRelationships: [...updatedNestedFwd, ...updatedNestedBwd],
+              }
+            }
+
+            return {
+              ...rel,
+              nestedRelationships: updateRelationshipInTree(rel.nestedRelationships, rest),
+            }
+          })
+        }
+
+        return {
+          ...prev,
+          relationships: searchedBackward ? prev.relationships : updateRelationshipInTree(prev.relationships, relPath),
+          backwardRelationships: searchedBackward
+            ? updateRelationshipInTree(prev.backwardRelationships || [], relPath)
+            : prev.backwardRelationships || [],
+        }
+      })
+
+      const enabledSourceFwd = sourceForwardRels.filter((r) => r.enabled && r.targetType !== recursiveRel.targetType)
+      const enabledSourceBwd = sourceBackwardRels.filter((r) => r.enabled && r.targetType !== recursiveRel.targetType)
+
+      for (const srcRel of [...enabledSourceFwd, ...enabledSourceBwd]) {
+        setState((prev) => {
+          const findMatchingRelInTarget = (relationships: RelationshipSelection[], path: string[]): string | null => {
+            if (path.length === 0) return null
+            const [currentId, ...rest] = path
+
+            for (const rel of relationships) {
+              if (rel.id !== currentId) continue
+
+              if (rest.length === 0) {
+                const match = rel.nestedRelationships.find((nr) => nr.relationshipName === srcRel.relationshipName)
+                return match?.id || null
+              }
+
+              return findMatchingRelInTarget(rel.nestedRelationships, rest)
+            }
+            return null
+          }
+
+          const matchId = searchedBackward
+            ? findMatchingRelInTarget(prev.backwardRelationships || [], relPath)
+            : findMatchingRelInTarget(prev.relationships, relPath)
+
+          if (matchId) {
+            setTimeout(() => {
+              handleRelationshipToggle([...relPath, matchId], true)
+            }, 50)
+          }
+
+          return prev
+        })
+      }
+    },
+    [state.relationships, state.backwardRelationships, handleRelationshipToggle],
+  )
+
   const handleCollapseAll = useCallback(() => {
     setCollapseKey((prev) => prev + 1)
   }, [])
 
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Fixed header */}
       <div className="flex-shrink-0 px-6 py-4 border-b bg-background">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -493,7 +668,6 @@ export function QueryBuilder() {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="space-y-4 w-full">
-          {/* Type Selection */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">1. Select Root Type</CardTitle>
@@ -510,7 +684,6 @@ export function QueryBuilder() {
             </CardContent>
           </Card>
 
-          {/* Type Block */}
           {state.rootType && !typeLoading && (
             <TypeBlock
               key={`typeblock-${state.rootType}`}
@@ -528,6 +701,7 @@ export function QueryBuilder() {
               onNestedRelationshipToggle={(relPath, enabled) => handleRelationshipToggle(relPath, enabled)}
               onNestedRelationshipLimitChange={(relPath, limit) => handleRelationshipLimitChange(relPath, limit)}
               onRepeatAttributes={handleRepeatAttributes}
+              onRepeatPattern={handleRepeatPattern}
               loadingRelationships={loadingRelationships}
               depth={0}
               idPrefix="root-"
@@ -555,7 +729,6 @@ export function QueryBuilder() {
             </Card>
           )}
 
-          {/* Pagination */}
           {state.rootType && !typeLoading && (
             <Card>
               <CardHeader className="pb-3">

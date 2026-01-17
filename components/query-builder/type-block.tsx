@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { ChevronDown, ChevronRight, Search, Loader2, Link2, Copy, ArrowRight, ArrowLeft } from "lucide-react"
+import { ChevronDown, ChevronRight, Search, Loader2, Link2, Copy, ArrowRight, ArrowLeft, Repeat } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,12 @@ interface TypeBlockProps {
   onNestedRelationshipToggle: (relPath: string[], enabled: boolean) => void
   onNestedRelationshipLimitChange: (relPath: string[], limit: number) => void
   onRepeatAttributes?: (relPath: string[], sourceAttributes: AttributeSelection[]) => void
+  onRepeatPattern?: (
+    recursiveRelId: string,
+    sourceAttributes: AttributeSelection[],
+    sourceForwardRels: RelationshipSelection[],
+    sourceBackwardRels: RelationshipSelection[],
+  ) => void
   loadingRelationships: Set<string>
   depth?: number
   relationshipPath?: string
@@ -269,6 +275,7 @@ export function TypeBlock({
   onNestedRelationshipToggle,
   onNestedRelationshipLimitChange,
   onRepeatAttributes,
+  onRepeatPattern,
   loadingRelationships,
   depth = 0,
   relationshipPath,
@@ -334,26 +341,63 @@ export function TypeBlock({
     }
   }
 
+  const recursiveRelationship = useMemo(() => {
+    const fwdRecursive = relationships.find((rel) => rel.targetType === typeName)
+    if (fwdRecursive) return { rel: fwdRecursive, isBackward: false }
+    const bwdRecursive = backwardRelationships.find((rel) => rel.targetType === typeName)
+    if (bwdRecursive) return { rel: bwdRecursive, isBackward: true }
+    return null
+  }, [relationships, backwardRelationships, typeName])
+
+  const hasConfiguredSettings = useMemo(() => {
+    const hasSelectedAttrs = attributes.some((a) => a.selected || a.filterEnabled)
+    const hasEnabledRels = relationships.some((r) => r.enabled) || backwardRelationships.some((r) => r.enabled)
+    return hasSelectedAttrs || hasEnabledRels
+  }, [attributes, relationships, backwardRelationships])
+
+  const handleRepeatPattern = () => {
+    if (recursiveRelationship && onRepeatPattern) {
+      onRepeatPattern(recursiveRelationship.rel.id, attributes, relationships, backwardRelationships)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <Card className={`border-l-4 ${borderColor}`}>
         <CardHeader className="pb-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            {relationshipPath && (
-              <>
-                <Link2 className="h-4 w-4 text-muted-foreground" />
-                <Badge variant="outline" className="text-xs font-mono">
-                  {relationshipPath}
-                </Badge>
-                <span className="text-muted-foreground">→</span>
-              </>
-            )}
-            <CardTitle className="text-base">
-              {typeLabel}
-              {typeLabel !== typeName && (
-                <span className="text-muted-foreground font-normal text-sm ml-2">({typeName})</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              {relationshipPath && (
+                <>
+                  <Link2 className="h-4 w-4 text-muted-foreground" />
+                  <Badge variant="outline" className="text-xs font-mono">
+                    {relationshipPath}
+                  </Badge>
+                  <span className="text-muted-foreground">→</span>
+                </>
               )}
-            </CardTitle>
+              <CardTitle className="text-base">
+                {typeLabel}
+                {typeLabel !== typeName && (
+                  <span className="text-muted-foreground font-normal text-sm ml-2">({typeName})</span>
+                )}
+              </CardTitle>
+            </div>
+            {recursiveRelationship && hasConfiguredSettings && onRepeatPattern && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 bg-transparent" onClick={handleRepeatPattern}>
+                      <Repeat className="h-4 w-4 mr-2" />
+                      Repeat Pattern
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Copy all attributes, filters, and relationships to the next recursive level</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         </CardHeader>
 
@@ -463,35 +507,41 @@ export function TypeBlock({
                 onNestedRelationshipToggle(fullPath, enabled)
               }}
               onRelationshipLimitChange={(nestedRelId, limit) => {
-                onNestedRelationshipLimitChange([...currentRelPath, nestedRelId], limit)
+                const fullPath = [...currentRelPath, nestedRelId]
+                onNestedRelationshipLimitChange(fullPath, limit)
               }}
-              onRelationshipAttributeChange={(nestedRelPath, attrKey, changes) => {
-                const fullPath = [...currentRelPath, ...nestedRelPath]
-                console.log(
-                  `[v0] Child onRelationshipAttributeChange: fullPath=[${fullPath.join(",")}], attr=${attrKey}`,
-                )
+              onRelationshipAttributeChange={(nestedPath, attrKey, changes) => {
+                const fullPath = [...currentRelPath, ...nestedPath]
                 onRelationshipAttributeChange(fullPath, attrKey, changes)
               }}
-              onNestedRelationshipToggle={(nestedRelPath, enabled) => {
-                const fullPath = [...currentRelPath, ...nestedRelPath]
-                console.log(
-                  `[v0] Child onNestedRelationshipToggle: fullPath=[${fullPath.join(",")}], enabled=${enabled}`,
-                )
+              onNestedRelationshipToggle={(nestedPath, enabled) => {
+                const fullPath = [...currentRelPath, ...nestedPath]
                 onNestedRelationshipToggle(fullPath, enabled)
               }}
-              onNestedRelationshipLimitChange={(nestedRelPath, limit) => {
-                onNestedRelationshipLimitChange([...currentRelPath, ...nestedRelPath], limit)
+              onNestedRelationshipLimitChange={(nestedPath, limit) => {
+                const fullPath = [...currentRelPath, ...nestedPath]
+                onNestedRelationshipLimitChange(fullPath, limit)
               }}
-              onRepeatAttributes={(nestedRelPath, sourceAttrs) => {
-                if (onRepeatAttributes) {
-                  onRepeatAttributes([...currentRelPath, ...nestedRelPath], sourceAttrs)
-                }
-              }}
+              onRepeatAttributes={
+                onRepeatAttributes
+                  ? (nestedPath, sourceAttrs) => {
+                      const fullPath = [...currentRelPath, ...nestedPath]
+                      onRepeatAttributes(fullPath, sourceAttrs)
+                    }
+                  : undefined
+              }
+              onRepeatPattern={
+                onRepeatPattern
+                  ? (recursiveRelId, sourceAttrs, sourceFwdRels, sourceBwdRels) => {
+                      onRepeatPattern(recursiveRelId, sourceAttrs, sourceFwdRels, sourceBwdRels)
+                    }
+                  : undefined
+              }
               loadingRelationships={loadingRelationships}
               depth={depth + 1}
               relationshipPath={rel.relationshipName}
               idPrefix={`${idPrefix}${rel.id}-`}
-              parentRelPath={[]}
+              parentRelPath={currentRelPath}
               ancestorTypes={currentAncestorTypes}
               collapseSignal={collapseSignal}
             />
