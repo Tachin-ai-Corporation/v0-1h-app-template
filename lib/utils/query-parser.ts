@@ -185,9 +185,14 @@ async function buildRelationshipSelections(
   availableRelationships: TypeRelationship[],
   fromType: string,
   prefetchedTypes: Map<string, TypeDefinition>,
+  depth = 0, // Add depth for debug logging
 ): Promise<{ forward: RelationshipSelection[]; backward: RelationshipSelection[] }> {
   const forward: RelationshipSelection[] = []
   const backward: RelationshipSelection[] = []
+
+  console.log(`[v0] buildRelationshipSelections depth=${depth} fromType=${fromType}`)
+  console.log(`[v0]   payloadRelationships:`, payloadRelationships?.map((r) => r.key) || [])
+  console.log(`[v0]   availableRelationships:`, availableRelationships.length)
 
   for (const rel of availableRelationships) {
     const isForward = rel.direction === "FORWARD"
@@ -201,6 +206,10 @@ async function buildRelationshipSelections(
 
     // Check if this relationship is in the payload (enabled)
     const payloadRel = payloadRelationships?.find((pr) => pr.key === queryPath)
+
+    if (payloadRel) {
+      console.log(`[v0]   MATCH: ${queryPath} (has ${payloadRel.relationships?.length || 0} nested)`)
+    }
 
     const selection: RelationshipSelection = {
       id: crypto.randomUUID(),
@@ -222,16 +231,20 @@ async function buildRelationshipSelections(
         const filterMap = parseFilterString(payloadRel.filter || "")
         selection.attributes = mapAttributesToSelections(targetTypeData.attributes, payloadRel.attributes, filterMap)
 
-        // This ensures sibling relationships like WorkflowTemplateStepSubmittedByPerson.Person
-        // are available at each nesting level
         const nestedResult = await buildRelationshipSelections(
           payloadRel.relationships,
           targetTypeData.relationships,
           targetTypeKey,
           prefetchedTypes,
+          depth + 1,
         )
         // Combine forward and backward into nestedRelationships
         selection.nestedRelationships = [...nestedResult.forward, ...nestedResult.backward]
+
+        const enabledNested = selection.nestedRelationships.filter((n) => n.enabled)
+        console.log(
+          `[v0]   Built ${selection.nestedRelationships.length} nested for ${queryPath}, ${enabledNested.length} enabled`,
+        )
       }
     }
 
