@@ -204,14 +204,11 @@ async function buildRelationshipSelections(
       ? `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
       : `${targetTypeKey}.${rel.relKey}.${fromTypeKey}`
 
-    const shortQueryPath = `${rel.relKey}.${targetTypeKey}`
-
-    const payloadRel = payloadRelationships?.find((pr) => pr.key === shortQueryPath)
+    // Match payload relationship using the full 3-part key
+    const payloadRel = payloadRelationships?.find((pr) => pr.key === fullQueryPath)
 
     if (payloadRel) {
-      console.log(
-        `[v0]   MATCH: ${shortQueryPath} -> ${fullQueryPath} (has ${payloadRel.relationships?.length || 0} nested)`,
-      )
+      console.log(`[v0]   MATCH: ${fullQueryPath} (has ${payloadRel.relationships?.length || 0} nested)`)
     }
 
     const selection: RelationshipSelection = {
