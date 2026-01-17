@@ -200,9 +200,7 @@ async function buildRelationshipSelections(
     const targetTypeKey = targetTypeRaw.replace(/\s+/g, "")
     const fromTypeKey = fromType.replace(/\s+/g, "")
 
-    const fullQueryPath = isForward
-      ? `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
-      : `${targetTypeKey}.${rel.relKey}.${fromTypeKey}`
+    const fullQueryPath = `${fromTypeKey}.${rel.relKey}.${targetTypeKey}`
 
     // Match payload relationship using the full 3-part key
     const payloadRel = payloadRelationships?.find((pr) => pr.key === fullQueryPath)
