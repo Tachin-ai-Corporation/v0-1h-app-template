@@ -403,7 +403,8 @@ export function QueryBuilder() {
       <TestPanel
         open={testPanelOpen}
         onOpenChange={setTestPanelOpen}
-        queryRequest={queryRequest}
+        request={queryRequest}
+        onExecute={handleExecute}
         results={results}
         error={queryError}
         isExecuting={isExecuting}
