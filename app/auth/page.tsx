@@ -4,78 +4,44 @@ import type React from "react"
 
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { AlertCircle, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
+import { AlertCircle, Loader2, CheckCircle2, ExternalLink, Building2, FlaskConical } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  type OneHealthEnvironment,
+  detectEnvironmentFromReferrer,
+  getStoredEnvironment,
+  setStoredEnvironment,
+  getApiUrl,
+} from "@/lib/env-config"
 
-type AuthState = "idle" | "loading" | "success" | "error" | "manual-entry"
+type AuthState = "idle" | "loading" | "success" | "error" | "select-env" | "manual-entry"
 
 interface AuthError {
   title: string
   message: string
 }
 
-function getOneHealthUrlFromCookie(): string | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(/onehealth_base_url=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
+function setOneHealthBaseUrlCookie(url: string) {
+  const normalizedUrl = url.replace(/\/$/, "")
+  document.cookie = `onehealth_base_url=${encodeURIComponent(normalizedUrl)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
 }
 
 function AuthContent() {
   const [authState, setAuthState] = useState<AuthState>("idle")
   const [error, setError] = useState<AuthError | null>(null)
   const [manualLpl, setManualLpl] = useState("")
-  const [manualUrl, setManualUrl] = useState("")
-  const [oneHealthUrl, setOneHealthUrl] = useState<string | null>(null)
+  const [selectedEnv, setSelectedEnv] = useState<OneHealthEnvironment | null>(null)
+  const [pendingLpl, setPendingLpl] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const router = useRouter()
 
   const lpl = (searchParams.get("lpl") || "").replace(/ /g, "+")
 
-  function isValidOneHealthUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url)
-      // Must contain "1health" in the hostname OR be an explicit 1health URL
-      // Exclude our own preview/app URLs
-      const isOneHealth = parsed.hostname.includes("1health")
-      const isOurPreview =
-        parsed.hostname.includes("vusercontent.net") ||
-        parsed.hostname.includes("vercel.app") ||
-        parsed.hostname.includes("localhost")
-      return isOneHealth && !isOurPreview
-    } catch {
-      return false
-    }
-  }
-
-  useEffect(() => {
-    // Try to get URL from cookie first
-    const urlFromCookie = getOneHealthUrlFromCookie()
-
-    if (urlFromCookie && isValidOneHealthUrl(urlFromCookie)) {
-      setOneHealthUrl(urlFromCookie)
-    } else if (document.referrer && isValidOneHealthUrl(document.referrer)) {
-      try {
-        const referrerUrl = new URL(document.referrer)
-        setOneHealthBaseUrlCookie(referrerUrl.origin)
-        setOneHealthUrl(referrerUrl.origin)
-      } catch {
-        // Invalid referrer, fall back to env var
-        setOneHealthUrl(process.env.NEXT_PUBLIC_1H_URL || null)
-      }
-    } else {
-      const envUrl = process.env.NEXT_PUBLIC_1H_URL || null
-      if (envUrl) {
-        setOneHealthBaseUrlCookie(envUrl)
-      }
-      setOneHealthUrl(envUrl)
-    }
-  }, [])
-
-  async function processLpl(lplValue: string) {
+  async function processLpl(lplValue: string, env: OneHealthEnvironment) {
     if (!lplValue) {
       setAuthState("manual-entry")
       return
@@ -83,11 +49,16 @@ function AuthContent() {
 
     setAuthState("loading")
 
+    // Set the environment and URL before making the token request
+    setStoredEnvironment(env)
+    const apiUrl = getApiUrl(env)
+    setOneHealthBaseUrlCookie(apiUrl)
+
     try {
       const res = await fetch("/api/token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lpl: lplValue }),
+        body: JSON.stringify({ lpl: lplValue, env }),
       })
 
       const data = await res.json()
@@ -126,41 +97,63 @@ function AuthContent() {
   }
 
   useEffect(() => {
-    if (lpl) {
-      processLpl(lpl)
-    } else {
+    if (!lpl) {
       setAuthState("manual-entry")
+      return
+    }
+
+    // Try to detect environment from referrer
+    const detectedEnv = detectEnvironmentFromReferrer(document.referrer)
+    
+    if (detectedEnv) {
+      // Auto-detected environment, proceed with auth
+      processLpl(lpl, detectedEnv)
+    } else {
+      // Check if we have a stored environment
+      const storedEnv = getStoredEnvironment()
+      if (storedEnv) {
+        processLpl(lpl, storedEnv)
+      } else {
+        // Need user to select environment
+        setPendingLpl(lpl)
+        setAuthState("select-env")
+      }
     }
   }, [lpl])
 
-  function setOneHealthBaseUrlCookie(url: string) {
-    if (!isValidOneHealthUrl(url)) {
-      console.warn("[v0] Ignoring invalid 1health URL:", url)
-      return
+  function handleEnvSelect(env: OneHealthEnvironment) {
+    setSelectedEnv(env)
+    setStoredEnvironment(env)
+    
+    if (pendingLpl) {
+      processLpl(pendingLpl, env)
+    } else if (manualLpl.trim()) {
+      processLpl(manualLpl.trim().replace(/ /g, "+"), env)
+    } else {
+      // Just set the environment and show manual entry
+      const apiUrl = getApiUrl(env)
+      setOneHealthBaseUrlCookie(apiUrl)
+      setAuthState("manual-entry")
     }
-    const normalizedUrl = url.replace(/\/$/, "")
-    document.cookie = `onehealth_base_url=${encodeURIComponent(normalizedUrl)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
-    setOneHealthUrl(normalizedUrl)
   }
 
   function handleManualSubmit(e: React.FormEvent) {
     e.preventDefault()
 
-    if (manualUrl.trim()) {
-      try {
-        const parsed = new URL(manualUrl.trim())
-        setOneHealthBaseUrlCookie(parsed.origin)
-      } catch {
-        // Invalid URL, ignore
-      }
+    if (!manualLpl.trim()) return
+
+    const env = selectedEnv || getStoredEnvironment()
+    if (!env) {
+      setPendingLpl(manualLpl.trim().replace(/ /g, "+"))
+      setAuthState("select-env")
+      return
     }
 
-    if (manualLpl.trim()) {
-      processLpl(manualLpl.trim().replace(/ /g, "+"))
-    }
+    processLpl(manualLpl.trim().replace(/ /g, "+"), env)
   }
 
-  const returnUrl = oneHealthUrl || process.env.NEXT_PUBLIC_1H_URL || ""
+  const currentEnv = selectedEnv || getStoredEnvironment()
+  const returnUrl = currentEnv ? getApiUrl(currentEnv) : ""
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -207,28 +200,88 @@ function AuthContent() {
           </div>
         )}
 
+        {authState === "select-env" && (
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle>Select Environment</CardTitle>
+              <CardDescription>
+                Choose which 1health environment to connect to.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Button
+                  variant="outline"
+                  className="h-24 flex flex-col gap-2 bg-transparent"
+                  onClick={() => handleEnvSelect("prod")}
+                >
+                  <Building2 className="h-8 w-8" />
+                  <span className="font-semibold">Production</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-24 flex flex-col gap-2 bg-transparent"
+                  onClick={() => handleEnvSelect("demo")}
+                >
+                  <FlaskConical className="h-8 w-8" />
+                  <span className="font-semibold">Demo</span>
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                This selection will be remembered for future visits.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {authState === "manual-entry" && (
           <Card>
             <CardHeader>
               <CardTitle>Authentication Required</CardTitle>
               <CardDescription>
-                No launch payload detected. You can paste an LPL below or return to 1health to login.
+                {currentEnv ? (
+                  <>Connected to <span className="font-medium">{currentEnv === "demo" ? "Demo" : "Production"}</span>. Paste an LPL below or return to 1health.</>
+                ) : (
+                  <>No launch payload detected. Select an environment and paste an LPL below.</>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
-                {!oneHealthUrl && (
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="url">1health URL</Label>
-                    <Input
-                      id="url"
-                      type="url"
-                      placeholder="https://demo.1health.io"
-                      value={manualUrl}
-                      onChange={(e) => setManualUrl(e.target.value)}
-                    />
+              {!currentEnv && (
+                <div className="flex flex-col gap-2">
+                  <Label>Environment</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={selectedEnv === "prod" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedEnv("prod")
+                        setStoredEnvironment("prod")
+                        setOneHealthBaseUrlCookie(getApiUrl("prod"))
+                      }}
+                    >
+                      <Building2 className="h-4 w-4 mr-2" />
+                      Production
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={selectedEnv === "demo" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedEnv("demo")
+                        setStoredEnvironment("demo")
+                        setOneHealthBaseUrlCookie(getApiUrl("demo"))
+                      }}
+                    >
+                      <FlaskConical className="h-4 w-4 mr-2" />
+                      Demo
+                    </Button>
                   </div>
-                )}
+                </div>
+              )}
+
+              <form onSubmit={handleManualSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="lpl">Launch Payload (LPL)</Label>
                   <Input
@@ -239,7 +292,7 @@ function AuthContent() {
                     onChange={(e) => setManualLpl(e.target.value)}
                   />
                 </div>
-                <Button type="submit" disabled={!manualLpl.trim()}>
+                <Button type="submit" disabled={!manualLpl.trim() || (!currentEnv && !selectedEnv)}>
                   Submit
                 </Button>
               </form>
@@ -253,13 +306,27 @@ function AuthContent() {
                 </div>
               </div>
 
-              {returnUrl && (
-                <Button variant="outline" asChild>
-                  <a href={returnUrl} target="_blank" rel="noopener noreferrer">
-                    Go to 1health <ExternalLink className="ml-2 h-4 w-4" />
-                  </a>
-                </Button>
-              )}
+              <div className="flex flex-col gap-2">
+                {currentEnv && (
+                  <Button variant="outline" asChild>
+                    <a href={returnUrl} target="_blank" rel="noopener noreferrer">
+                      Go to 1health ({currentEnv === "demo" ? "Demo" : "Production"}) <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+                {currentEnv && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedEnv(null)
+                      setAuthState("select-env")
+                    }}
+                  >
+                    Switch Environment
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}

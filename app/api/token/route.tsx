@@ -3,6 +3,8 @@ import { NextResponse } from "next/server"
 import { createDecipheriv, createHmac } from "crypto"
 import { cookies } from "next/headers"
 
+type OneHealthEnvironment = "demo" | "prod"
+
 interface AuthResponse {
   id: string
   scope: string
@@ -43,6 +45,26 @@ interface DecryptedPayload {
     encounter_id?: string
     [key: string]: string | undefined
   }
+}
+
+/**
+ * Gets the secret key for the specified environment
+ */
+function getSecretKey(env: OneHealthEnvironment): string | undefined {
+  if (env === "demo") {
+    return process.env.ONEHEALTH_SECRET_KEY_DEMO
+  }
+  return process.env.ONEHEALTH_SECRET_KEY_PROD
+}
+
+/**
+ * Gets the API URL for the specified environment
+ */
+function getApiUrl(env: OneHealthEnvironment): string {
+  if (env === "demo") {
+    return process.env.NEXT_PUBLIC_1H_URL_DEMO || "https://demo.1health.io"
+  }
+  return process.env.NEXT_PUBLIC_1H_URL_PROD || "https://app.1health.io"
 }
 
 /**
@@ -117,32 +139,47 @@ function decryptAesGcm({
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies()
-    const envOneHealthUrl = process.env.NEXT_PUBLIC_1H_URL
-
-    if (envOneHealthUrl) {
-      const currentCookieUrl = cookieStore.get("onehealth_base_url")?.value
-      const decodedCurrentUrl = currentCookieUrl ? decodeURIComponent(currentCookieUrl) : null
-
-      if (decodedCurrentUrl !== envOneHealthUrl) {
-        cookieStore.set("onehealth_base_url", encodeURIComponent(envOneHealthUrl), {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: 60 * 60 * 24 * 30, // 30 days
-          path: "/",
-        })
-      }
-    }
-
     const body = await req.json()
 
     if (!body.lpl) {
       return NextResponse.json({ error: "Missing required field: lpl is required" }, { status: 400 })
     }
 
-    const secretKey = process.env.ONEHEALTH_SECRET_KEY
+    // Get environment from request body, cookie, or default to prod
+    let env: OneHealthEnvironment = "prod"
+    if (body.env === "demo" || body.env === "prod") {
+      env = body.env
+    } else {
+      const envCookie = cookieStore.get("onehealth_env")?.value
+      if (envCookie === "demo" || envCookie === "prod") {
+        env = envCookie
+      }
+    }
+
+    // Set the environment cookie
+    cookieStore.set("onehealth_env", env, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    })
+
+    // Set the base URL cookie for the selected environment
+    const apiUrl = getApiUrl(env)
+    cookieStore.set("onehealth_base_url", encodeURIComponent(apiUrl), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    })
+
+    const secretKey = getSecretKey(env)
     if (!secretKey) {
-      return NextResponse.json({ error: "Server configuration error: missing secret key" }, { status: 500 })
+      return NextResponse.json({ 
+        error: `Server configuration error: missing secret key for ${env} environment` 
+      }, { status: 500 })
     }
 
     let lpl: Buffer
@@ -202,19 +239,7 @@ export async function POST(req: Request) {
 
     const securityCode = payload.required.oneTimeCode.value
 
-    const urlFromCookie = cookieStore.get("onehealth_base_url")?.value
-    const authUrl = urlFromCookie ? decodeURIComponent(urlFromCookie) : process.env.NEXT_PUBLIC_1H_URL
-
-    if (!authUrl) {
-      return NextResponse.json(
-        {
-          error:
-            "Authentication configuration error: No 1health URL available. Please return to 1health and access this app via the /auth endpoint.",
-        },
-        { status: 500 },
-      )
-    }
-
+    const authUrl = getApiUrl(env)
     const tokenExchangeUrl = `${authUrl}/api/v2/public/external-application/auth/oauth2/user/token`
 
     let authRes: Response
