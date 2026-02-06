@@ -11,9 +11,10 @@ All 1health API calls are made directly from the browser using `authFetch()` fro
 │                      SERVER-SIDE (Minimal)                      │
 ├─────────────────────────────────────────────────────────────────┤
 │  /api/token (POST)                                              │
-│    - Decrypts LPL using ONEHEALTH_SECRET_KEY                    │
+│    - Decrypts LPL using ONEHEALTH_SECRET_KEY_DEMO or _PROD      │
+│    - Environment selected by user on /auth page                 │
 │    - Exchanges one-time code for OAuth tokens                   │
-│    - Sets cookies (access_token, refresh_token)                 │
+│    - Sets cookies (access_token, refresh_token, environment)    │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
