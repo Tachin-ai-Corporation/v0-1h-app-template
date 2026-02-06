@@ -25,18 +25,16 @@ All 1health API calls are made directly from the browser using `authFetch()` fro
 │    - Cookie utilities                                           │
 │                                                                 │
 │  lib/api/*.ts                                                   │
-│    - patient-search.ts - Patient search API                     │
-│    - person.ts - Person CRUD operations                         │
-│    - insurance.ts - Insurance operations                        │
-│    - type-metadata.ts - Type definitions and metadata           │
+│    - config.ts - API version and endpoint configuration         │
 │    - query.ts - Generic query API                               │
-│    - query-person.ts - Person-specific queries                  │
-│    - journey-grid.ts - Journey grid data                        │
-│    - user.ts - Current user info                                │
+│    - user.ts - Current user info (fetchMyself)                  │
+│    - types.ts - Shared TypeScript types                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Using authFetch
+
+`authFetch()` is the core utility for all authenticated API calls. It automatically attaches the Bearer token, handles 401 responses with transparent token refresh, and throws `SessionExpiredError` when refresh fails.
 
 ```typescript
 import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
@@ -56,30 +54,46 @@ async function fetchData() {
 }
 ```
 
-## API Modules
+## Creating New API Modules
 
-### Patient Search (`lib/api/patient-search.ts`)
-
-```typescript
-import { searchPatients } from "@/lib/api/patient-search"
-
-const results = await searchPatients({
-  firstName: "John",
-  lastName: "Doe",
-  dateOfBirth: "1990-01-01",
-})
-```
-
-### Type Metadata (`lib/api/type-metadata.ts`)
+When adding new API functionality, create a new file in `lib/api/`. Follow the pattern established in `lib/api/user.ts`:
 
 ```typescript
-import { fetchAllTypes, fetchTypeDetails } from "@/lib/api/type-metadata"
+// lib/api/my-feature.ts
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
-const types = await fetchAllTypes()
-const personType = await fetchTypeDetails("Person")
+export interface MyData {
+  id: number
+  name: string
+}
+
+export interface MyDataResult {
+  success: boolean
+  data?: MyData[]
+  error?: string
+}
+
+export async function fetchMyData(): Promise<MyDataResult> {
+  try {
+    const baseUrl = getOneHealthBaseUrl()
+    const url = `${baseUrl}/api/v3/my-endpoint`
+
+    const response = await authFetch(url, { method: "GET" })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      return { success: false, error: `Failed: ${response.status}` }
+    }
+
+    const data = await response.json()
+    return { success: true, data }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
 ```
 
-### Generic Query (`lib/api/query.ts`)
+## Generic Query (`lib/api/query.ts`)
 
 ```typescript
 import { executeQuery } from "@/lib/api/query"
@@ -138,3 +152,21 @@ try {
   }
   throw error
 }
+```
+
+## Using SWR for Data Fetching
+
+Use the `useFetch` hook from `lib/hooks/use-fetch.ts` for SWR-based data fetching in components:
+
+```typescript
+import { useFetch } from "@/lib/hooks/use-fetch"
+
+function MyComponent() {
+  const { data, error, isLoading, mutate } = useFetch("/api/v3/my-endpoint")
+  
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+  
+  return <div>{JSON.stringify(data)}</div>
+}
+```

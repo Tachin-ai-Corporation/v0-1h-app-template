@@ -1,14 +1,23 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ArrowLeft, Settings, RefreshCw, Clock, Key, AlertTriangle, CheckCircle, Copy, Check } from "lucide-react"
+import {
+  RefreshCw,
+  Clock,
+  Key,
+  AlertTriangle,
+  CheckCircle,
+  Copy,
+  Check,
+  User,
+  Loader2,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { refreshToken, getCookie } from "@/lib/auth-client"
-
-interface SettingsPageProps {
-  onClose: () => void
-}
+import { fetchMyself, type UserInfo } from "@/lib/api/user"
 
 interface TokenInfo {
   expiresAt: number | null
@@ -68,7 +77,11 @@ function getTokenInfo(tokenName: string): TokenInfo {
   return { expiresAt, isExpired: remaining <= 0, timeRemaining: formatTimeRemaining(remaining), rawToken: token }
 }
 
-export function SettingsPage({ onClose }: SettingsPageProps) {
+export function SettingsPage() {
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [userLoading, setUserLoading] = useState(true)
+  const [userError, setUserError] = useState<string | null>(null)
+
   const [accessTokenInfo, setAccessTokenInfo] = useState<TokenInfo>({
     expiresAt: null,
     isExpired: true,
@@ -85,6 +98,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "success" | "error">("idle")
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
 
+  // Fetch user info on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      setUserLoading(true)
+      setUserError(null)
+      const result = await fetchMyself()
+      if (result.success && result.data) {
+        setUserInfo(result.data)
+      } else {
+        setUserError(result.error || "Failed to load user info")
+      }
+      setUserLoading(false)
+    }
+    loadUser()
+  }, [])
+
   const updateTokenInfo = useCallback(() => {
     setAccessTokenInfo(getTokenInfo("access_token"))
     setRefreshTokenInfo(getTokenInfo("refresh_token"))
@@ -99,16 +128,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleManualRefresh = async () => {
     setIsRefreshing(true)
     setRefreshStatus("idle")
-
-    console.log("[Settings] Manual token refresh requested")
-
     try {
       const success = await refreshToken()
-      console.log("[Settings] Refresh completed, success:", success)
       setRefreshStatus(success ? "success" : "error")
       if (success) updateTokenInfo()
-    } catch (error) {
-      console.error("[Settings] Refresh error:", error)
+    } catch {
       setRefreshStatus("error")
     } finally {
       setIsRefreshing(false)
@@ -124,24 +148,98 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }, [])
 
   return (
-    <div className="h-full flex flex-col bg-background">
-      <div className="flex items-center gap-4 px-6 py-4 border-b border-border bg-card">
-        <Button variant="ghost" size="icon" onClick={onClose} className="text-foreground hover:bg-accent">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-        </div>
+    <div className="p-6 max-w-4xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground">Settings</h1>
+        <p className="text-muted-foreground mt-2">Account information and authentication status.</p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-            <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col gap-6">
+        {/* Account Info Card */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <User className="h-5 w-5 text-muted-foreground" />
+              <CardTitle className="text-base">Account Information</CardTitle>
+            </div>
+            <CardDescription>Your 1health user profile</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {userLoading ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-4 w-64" />
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-52" />
+              </div>
+            ) : userError ? (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span className="text-sm">{userError}</span>
+              </div>
+            ) : userInfo ? (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Name</span>
+                    <p className="text-sm font-medium text-foreground mt-1">
+                      {userInfo.firstName} {userInfo.lastName}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Username</span>
+                    <p className="text-sm font-medium text-foreground mt-1 font-mono">{userInfo.username}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Email</span>
+                    <p className="text-sm font-medium text-foreground mt-1">{userInfo.email}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">User ID</span>
+                    <p className="text-sm font-medium text-foreground mt-1 font-mono">{userInfo.id}</p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Tenant</span>
+                    <p className="text-sm font-medium text-foreground mt-1">
+                      {userInfo.tenantContext?.name || "N/A"}
+                      {userInfo.tenantContext?.id && (
+                        <span className="text-muted-foreground font-mono text-xs ml-2">
+                          (ID: {userInfo.tenantContext.id})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">System Admin</span>
+                    <p className="text-sm font-medium text-foreground mt-1">
+                      {userInfo.systemAdministrator ? "Yes" : "No"}
+                    </p>
+                  </div>
+                </div>
+                {userInfo.roles && userInfo.roles.length > 0 && (
+                  <div className="p-3 bg-muted rounded-md">
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">Roles</span>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {userInfo.roles.map((role) => (
+                        <Badge key={role} variant="secondary">
+                          {role}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {/* Authentication Status Card */}
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Key className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-semibold text-foreground">Authentication Status</h2>
+                <CardTitle className="text-base">Authentication Status</CardTitle>
               </div>
               <Button
                 variant="outline"
@@ -154,7 +252,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 {isRefreshing ? "Refreshing..." : "Refresh Token"}
               </Button>
             </div>
-
+            <CardDescription>Token status and management</CardDescription>
+          </CardHeader>
+          <CardContent>
             {refreshStatus === "success" && (
               <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md flex items-center gap-2 text-green-600 dark:text-green-400">
                 <CheckCircle className="h-4 w-4" />
@@ -169,7 +269,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
+              {/* Access Token */}
               <div className="p-4 bg-muted rounded-md">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -231,6 +332,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 )}
               </div>
 
+              {/* Refresh Token */}
               <div className="p-4 bg-muted rounded-md">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -284,37 +386,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 )}
               </div>
             </div>
-          </div>
-
-          <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-2">Application Settings</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Configure your application settings here. This is a placeholder page that developers can customize for
-              their specific use case.
-            </p>
-
-            <div className="space-y-4">
-              <div className="p-4 bg-muted rounded-md">
-                <h3 className="text-sm font-medium text-foreground mb-1">Getting Started</h3>
-                <p className="text-sm text-muted-foreground">
-                  To add settings functionality, edit this component at{" "}
-                  <code className="text-xs bg-background px-1 py-0.5 rounded">components/settings-page.tsx</code>
-                </p>
-              </div>
-
-              <div className="p-4 bg-muted rounded-md">
-                <h3 className="text-sm font-medium text-foreground mb-1">Common Settings Patterns</h3>
-                <ul className="text-sm text-muted-foreground list-disc list-inside space-y-1">
-                  <li>User preferences (theme, language, timezone)</li>
-                  <li>Notification settings</li>
-                  <li>API configuration</li>
-                  <li>Feature flags</li>
-                  <li>Organization/tenant settings</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

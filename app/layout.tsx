@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { NavigationProvider } from "@/contexts/navigation-context"
 
 export const metadata: Metadata = {
-  title: "1health App Template",
-  description: "Generic 1health Front-End Application Template",
+  title: "1health App Starter",
+  description: "Greenfield starter template for building 1health platform applications",
   icons: {
     icon: "/favicon.png",
   },

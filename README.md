@@ -1,194 +1,129 @@
-# 1health App Template
+# 1health App Starter
 
-A generic template for building front-end applications on top of the 1health platform using Next.js and v0.
+A greenfield starter template for building front-end applications on top of the 1health platform using Next.js and v0.
 
-## Overview
+## What's Included
 
-This template provides the foundational infrastructure for connecting to 1health APIs, including:
-
-- **Authentication**: SSO integration with LPL token exchange
-- **Patient Management**: Search, view demographics, insurance, and external IDs
-- **Campaign Grids**: Connect to any campaign to view journey data in a configurable grid
-- **Reusable Components**: Data grids, patient cards, and UI components
+- **Authentication** -- LPL-based SSO with automatic token refresh and session management
+- **API Layer** -- `authFetch()` wrapper for all authenticated 1health API calls
+- **Navigation** -- SPA-style client-side routing with browser history support
+- **App Shell** -- Configurable layout with sidebar navigation, header, and theme toggle
+- **Settings Page** -- Displays user account info and token management
+- **Documentation** -- Architecture docs for auth, API patterns, and debugging
 
 ## Project Structure
 
 ```
-├── app/
-│   ├── actions/           # Server actions for 1health API calls
-│   │   ├── person-actions.ts        # Patient CRUD operations
-│   │   ├── insurance-actions.ts     # Insurance data fetching
-│   │   ├── journey-grid-actions.ts  # Campaign journey grid data
-│   │   ├── patient-search-actions.ts # Patient search functionality
-│   │   ├── query/                   # Generic query builder actions
-│   │   └── ...
-│   ├── api/
-│   │   └── token/         # Token exchange and refresh endpoints
-│   └── auth/              # Authentication page
-├── components/
-│   ├── app-shell.tsx      # Main application shell with sidebar
-│   ├── header.tsx         # Configurable app header
-│   ├── home-page-client.tsx # Main client-side routing component
-│   ├── data-grid/         # Reusable data grid components
-│   ├── patient/           # Patient-related components
-│   │   ├── patient-demographics-card.tsx
-│   │   ├── patient-insurance-card.tsx
-│   │   └── patient-external-ids-card.tsx
-│   ├── pages/             # Page components
-│   │   ├── home-page.tsx
-│   │   ├── patient-search-page.tsx
-│   │   ├── patient-details-page.tsx
-│   │   └── campaign-grid-page.tsx
-│   └── ui/                # shadcn/ui components
-├── contexts/
-│   └── navigation-context.tsx  # Client-side navigation state
-├── lib/
-│   ├── auth-server.ts     # Server-side auth utilities (authFetch)
-│   ├── api/
-│   │   ├── config.ts      # API endpoint configuration
-│   │   └── types.ts       # TypeScript types for API responses
-│   └── utils/             # Utility functions
-└── docs/
-    └── ACTION-PATTERNS.md # Guide for creating new API actions
+app/
+  api/token/         # Server-side LPL decryption and token exchange
+  auth/              # Authentication page (LPL entry point)
+  page.tsx           # Auth guard, redirects to auth or renders app
+  layout.tsx         # Root layout with providers
+
+components/
+  app-shell.tsx      # Main layout shell with sidebar + header
+  header.tsx         # Configurable app header
+  home-page-client.tsx  # Main client-side routing (register pages here)
+  settings-page.tsx  # User account info + token management
+  pages/
+    home-page.tsx    # Starter home page (replace with your own)
+  ui/                # shadcn/ui components
+
+contexts/
+  navigation-context.tsx  # Client-side navigation state
+
+lib/
+  auth-client.ts     # Client-side auth: authFetch(), refreshToken(), cookies
+  auth-server.ts     # Server-side auth: LPL decryption
+  api/
+    config.ts        # API version and endpoint configuration
+    index.ts         # Barrel exports
+    query.ts         # Generic query API
+    types.ts         # Shared TypeScript types
+    user.ts          # Current user info (fetchMyself, isSystemAdmin)
+  hooks/
+    use-fetch.ts     # SWR-based data fetching hook
+
+hooks/
+  use-session-expired.ts  # Session expiry detection
+  use-modal-back-button.ts  # Modal back-button handling
+
+docs/
+  AUTH-ARCHITECTURE.md   # Authentication flow documentation
+  ACTION-PATTERNS.md     # API call patterns and examples
+  README-DEBUGGER.md     # API debug logging documentation
 ```
 
-## Getting Started
+## Environment Variables
 
-### 1. Environment Variables
+| Variable | Description |
+|---|---|
+| `APP_ID_DEMO` / `APP_ID_PROD` | Application ID for demo/production environments |
+| `NEXT_PUBLIC_1H_URL_DEMO` / `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL |
+| `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect target |
+| `NEXT_PUBLIC_ENABLE_DEBUG_STREAM` | Enable API debug logging |
+| `ONEHEALTH_SECRET_KEY_DEMO` / `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key |
 
-The following environment variables are required:
+## Quick Start
 
-```env
-NEXT_PUBLIC_ONE_HEALTH_BASE_URL=https://api.1health.io
-```
+### 1. Add a New Page
 
-### 2. Authentication Flow
-
-The app uses LPL (Launch Point Link) token exchange for SSO:
-
-1. User is redirected to `/auth?token=<LPL_TOKEN>`
-2. The token is exchanged for a 1health session via `/api/token`
-3. Session is stored in cookies and used for subsequent API calls
-
-### 3. Adding New Pages
-
-1. Create your page component in `components/pages/`
-2. Add a navigation item in `components/home-page-client.tsx`:
+Create a component in `components/pages/`:
 
 ```tsx
+// components/pages/my-page.tsx
+"use client"
+
+export function MyPage() {
+  return <div className="p-6">My new page</div>
+}
+```
+
+### 2. Register the Page
+
+In `components/home-page-client.tsx`, add a nav item and a case in the view switch:
+
+```tsx
+import { FileText } from "lucide-react"
+import { MyPage } from "@/components/pages/my-page"
+
 const navItems: NavItem[] = [
   { name: "Home", key: "home", icon: Home },
-  { name: "Patient Search", key: "patient-search", icon: Search },
-  { name: "Your New Page", key: "your-page", icon: YourIcon },
+  { name: "My Page", key: "my-page", icon: FileText },  // Add this
+  { name: "Settings", key: "settings", icon: Settings },
 ]
-```
 
-3. Add the page to the render logic:
-
-```tsx
-const renderContent = () => {
+const renderCurrentPage = () => {
   switch (currentView) {
-    case "your-page":
-      return <YourNewPage />
-    // ... existing cases
+    case "my-page":
+      return <MyPage />  // Add this
+    case "settings":
+      return <SettingsPage />
+    case "home":
+    default:
+      return <StarterHomePage />
   }
 }
 ```
 
-### 4. Creating New API Actions
+### 3. Add API Functions
 
-See `docs/ACTION-PATTERNS.md` for detailed patterns. Basic example:
+Create API modules in `lib/api/` using `authFetch()`:
 
 ```typescript
-"use server"
+// lib/api/my-feature.ts
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
-import { authFetch } from "@/lib/auth-server"
-import { API_ENDPOINTS } from "@/lib/api/config"
-
-export async function fetchSomeData(id: string) {
-  const response = await authFetch(`${API_ENDPOINTS.base}/your-endpoint/${id}`)
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch data: ${response.statusText}`)
-  }
-  
+export async function fetchMyData() {
+  const baseUrl = getOneHealthBaseUrl()
+  const response = await authFetch(`${baseUrl}/api/v3/my-endpoint`)
+  if (!response.ok) throw new Error(`API error: ${response.status}`)
   return response.json()
 }
 ```
 
-### 5. Using the Campaign Grid
-
-Connect to any campaign by providing its ID:
-
-```tsx
-import { CampaignGridPage } from "@/components/pages/campaign-grid-page"
-
-// With a preset campaign ID
-<CampaignGridPage initialCampaignId="your-campaign-id" />
-
-// Or let users enter the campaign ID
-<CampaignGridPage />
-```
-
-### 6. Patient Details
-
-Open patient details from anywhere using the navigation context:
-
-```tsx
-import { useNavigation } from "@/contexts/navigation-context"
-
-function YourComponent() {
-  const { setSelectedPersonId } = useNavigation()
-  
-  const handlePatientClick = (personId: string) => {
-    setSelectedPersonId(personId)  // Opens patient overlay
-  }
-}
-```
-
-## Key Components
-
-### AppShell
-
-The main application wrapper providing header, sidebar, and content area:
-
-```tsx
-<AppShell
-  title="Your App Name"
-  navItems={yourNavItems}
-  headerSlot={<YourHeaderControls />}
->
-  {children}
-</AppShell>
-```
-
-### DataGrid
-
-A flexible data grid with pagination, column customization, and export:
-
-```tsx
-<DataGrid
-  data={rows}
-  columns={columns}
-  totalCount={totalCount}
-  pageSize={pageSize}
-  currentPage={currentPage}
-  onPageChange={setCurrentPage}
-  onRowClick={handleRowClick}
-/>
-```
-
-## Extending the Template
-
-This template is designed to be extended for specific use cases:
-
-1. **Add domain-specific pages** in `components/pages/`
-2. **Create new server actions** in `app/actions/` for your API needs
-3. **Extend patient details** by adding cards to `PatientDetailsPage`
-4. **Customize the data grid** columns for your campaign data
-5. **Add new navigation items** to the sidebar
-
 ## Documentation
 
-- `docs/ACTION-PATTERNS.md` - Patterns for creating 1health API actions
-- `user_read_only_context/project_sources/QUERY-ACTIONS-README.md` - Query API documentation
+- `docs/AUTH-ARCHITECTURE.md` -- Authentication flow and token management
+- `docs/ACTION-PATTERNS.md` -- API call patterns, `authFetch()` usage, and SWR integration
+- `docs/README-DEBUGGER.md` -- API debug logging and console output

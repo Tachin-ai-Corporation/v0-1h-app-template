@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, Suspense, type ReactNode } from "react"
-import { ChevronLeft, ChevronRight, Home, Search, Type as type, LucideIcon } from "lucide-react"
+import { ChevronLeft, ChevronRight, Home, Settings, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Header } from "@/components/header"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -30,7 +30,7 @@ interface AppShellProps {
 // Default navigation items - developers can override these
 const defaultNavItems: NavItem[] = [
   { name: "Home", key: "home", icon: Home },
-  { name: "Patient Search", key: "patient-search", icon: Search },
+  { name: "Settings", key: "settings", icon: Settings },
 ]
 
 export function AppShell({
