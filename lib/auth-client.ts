@@ -90,14 +90,12 @@ export function getRefreshToken(): string | null {
 }
 
 /**
- * Gets the 1health base URL from cookies or environment
+ * Gets the 1health base URL from cookies.
+ * The URL is set per-environment (demo/prod) during authentication.
  */
 export function getOneHealthBaseUrl(): string {
   const cookieUrl = getCookie("onehealth_base_url")
   if (cookieUrl) return cookieUrl
-
-  const envUrl = process.env.NEXT_PUBLIC_1H_URL
-  if (envUrl) return envUrl
 
   throw new Error("No 1health base URL available. User must authenticate via /auth first.")
 }
@@ -120,23 +118,6 @@ export function getUserId(): number | null {
   if (!userIdCookie) return null
   const userId = Number.parseInt(userIdCookie, 10)
   return Number.isNaN(userId) ? null : userId
-}
-
-/**
- * Gets the workflow owner tenant ID from cookies
- */
-export function getWorkflowOwnerTenantId(): number | null {
-  const tenantIdCookie = getCookie("workflow_owner_tenant_id")
-  if (!tenantIdCookie) return null
-  const tenantId = Number.parseInt(tenantIdCookie, 10)
-  return Number.isNaN(tenantId) ? null : tenantId
-}
-
-/**
- * Sets the workflow owner tenant ID cookie
- */
-export function setWorkflowOwnerTenantIdCookie(tenantId: number): void {
-  setCookie("workflow_owner_tenant_id", tenantId.toString(), 60 * 60 * 24 * 7) // 7 days
 }
 
 // ============================================================================

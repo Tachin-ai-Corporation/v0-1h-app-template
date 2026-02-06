@@ -32,7 +32,7 @@ export async function fetchMyself(): Promise<MyselfResult> {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("[v0] fetchMyself error:", response.status, errorText)
+      console.error("[1health API] fetchMyself error:", response.status, errorText)
       return { success: false, error: `Failed to fetch user info: ${response.status}` }
     }
 
@@ -52,7 +52,7 @@ export async function fetchMyself(): Promise<MyselfResult> {
       },
     }
   } catch (error) {
-    console.error("[v0] fetchMyself exception:", error)
+    console.error("[1health API] fetchMyself exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

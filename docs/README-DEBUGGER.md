@@ -24,11 +24,12 @@ Each API call is logged as a collapsible group:
 - **Red (5xx)**: Server errors
 - **Blue**: Request info
 
-## Sensitive Data Redaction
+## Sensitive Data in Logs
 
-The following values are automatically redacted in logs:
-- Authorization headers (Bearer tokens)
-- Refresh tokens in request bodies
+Note: API logs include full request/response data including Authorization headers
+and tokens. This is intentional for debugging but should be considered when
+sharing console output. Future enhancement: add optional redaction of Bearer
+tokens and refresh tokens.
 
 ## Architecture
 
@@ -40,7 +41,7 @@ The following values are automatically redacted in logs:
 │    - authFetch() wraps all 1health API calls                    │
 │    - Logs request/response to console.group()                   │
 │    - Auto-refresh on 401 responses                              │
-│    - Sensitive data redaction                                   │
+│    - Full request/response logging                              │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
