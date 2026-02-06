@@ -16,8 +16,7 @@ import { cookies } from "next/headers"
 
 /**
  * Retrieves the 1health base URL from cookies.
- * This is set by the /auth page from document.referrer.
- * Falls back to NEXT_PUBLIC_1H_URL env var if cookie not set.
+ * The URL is set per-environment (demo/prod) during authentication.
  */
 export async function getOneHealthBaseUrl(): Promise<string> {
   const cookieStore = await cookies()
@@ -25,11 +24,6 @@ export async function getOneHealthBaseUrl(): Promise<string> {
 
   if (urlFromCookie) {
     return decodeURIComponent(urlFromCookie)
-  }
-
-  const envUrl = process.env.NEXT_PUBLIC_1H_URL
-  if (envUrl) {
-    return envUrl
   }
 
   throw new Error("No 1health base URL available. User must authenticate via /auth first.")

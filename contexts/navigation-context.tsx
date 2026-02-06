@@ -112,10 +112,14 @@ export function NavigationProvider({ children }: { children: React.ReactNode }) 
     [buildUrl],
   )
 
-  // Confirm exit to 1health
+  // Confirm exit to 1health -- read URL from cookie (set by auth page per environment)
   const confirmAuthExit = useCallback(() => {
-    const oneHealthUrl = process.env.NEXT_PUBLIC_1H_URL || ""
-    window.location.href = oneHealthUrl + "/applications"
+    let oneHealthUrl = ""
+    const match = document.cookie.match(/onehealth_base_url=([^;]+)/)
+    if (match) {
+      oneHealthUrl = decodeURIComponent(match[1])
+    }
+    window.location.href = oneHealthUrl ? `${oneHealthUrl}/applications` : "/auth"
   }, [])
 
   // Cancel exit dialog

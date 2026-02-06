@@ -45,6 +45,31 @@ interface DecryptedPayload {
   }
 }
 
+type Environment = "demo" | "prod"
+
+/**
+ * Environment-aware configuration.
+ * Resolves the correct secret key and base URL based on the chosen environment.
+ */
+function getEnvConfig(environment: Environment) {
+  const secretKey =
+    environment === "demo"
+      ? process.env.ONEHEALTH_SECRET_KEY_DEMO
+      : process.env.ONEHEALTH_SECRET_KEY_PROD
+
+  const baseUrl =
+    environment === "demo"
+      ? process.env.NEXT_PUBLIC_1H_URL_DEMO || "https://demo.1health.io"
+      : process.env.NEXT_PUBLIC_1H_URL_PROD || "https://app.1health.io"
+
+  const appId =
+    environment === "demo"
+      ? process.env.APP_ID_DEMO
+      : process.env.APP_ID_PROD
+
+  return { secretKey, baseUrl, appId }
+}
+
 /**
  * Derives a 256-bit AES key from the JWT token using HKDF-SHA256.
  * Matches Java's KeyDerivationUtil.derive() implementation.
@@ -108,7 +133,8 @@ function decryptAesGcm({
  * POST /api/token
  * Body:
  * {
- *   "lpl": "<base64>"  // IV (first 12 bytes) + ciphertext + tag (last 16 bytes)
+ *   "lpl": "<base64>",         // IV (first 12 bytes) + ciphertext + tag (last 16 bytes)
+ *   "environment": "demo"|"prod"  // Which environment to authenticate against
  * }
  *
  * This is the ONLY server-side route that requires the ONEHEALTH_SECRET_KEY.
@@ -117,32 +143,37 @@ function decryptAesGcm({
 export async function POST(req: Request) {
   try {
     const cookieStore = await cookies()
-    const envOneHealthUrl = process.env.NEXT_PUBLIC_1H_URL
-
-    if (envOneHealthUrl) {
-      const currentCookieUrl = cookieStore.get("onehealth_base_url")?.value
-      const decodedCurrentUrl = currentCookieUrl ? decodeURIComponent(currentCookieUrl) : null
-
-      if (decodedCurrentUrl !== envOneHealthUrl) {
-        cookieStore.set("onehealth_base_url", encodeURIComponent(envOneHealthUrl), {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: 60 * 60 * 24 * 30, // 30 days
-          path: "/",
-        })
-      }
-    }
-
     const body = await req.json()
 
     if (!body.lpl) {
       return NextResponse.json({ error: "Missing required field: lpl is required" }, { status: 400 })
     }
 
-    const secretKey = process.env.ONEHEALTH_SECRET_KEY
+    const environment: Environment = body.environment === "prod" ? "prod" : "demo"
+    const { secretKey, baseUrl } = getEnvConfig(environment)
+
+    // Store the environment and base URL in cookies
+    cookieStore.set("onehealth_environment", environment, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    })
+
+    cookieStore.set("onehealth_base_url", encodeURIComponent(baseUrl), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      path: "/",
+    })
+
     if (!secretKey) {
-      return NextResponse.json({ error: "Server configuration error: missing secret key" }, { status: 500 })
+      return NextResponse.json(
+        { error: `Server configuration error: missing secret key for ${environment} environment` },
+        { status: 500 },
+      )
     }
 
     let lpl: Buffer
@@ -202,20 +233,7 @@ export async function POST(req: Request) {
 
     const securityCode = payload.required.oneTimeCode.value
 
-    const urlFromCookie = cookieStore.get("onehealth_base_url")?.value
-    const authUrl = urlFromCookie ? decodeURIComponent(urlFromCookie) : process.env.NEXT_PUBLIC_1H_URL
-
-    if (!authUrl) {
-      return NextResponse.json(
-        {
-          error:
-            "Authentication configuration error: No 1health URL available. Please return to 1health and access this app via the /auth endpoint.",
-        },
-        { status: 500 },
-      )
-    }
-
-    const tokenExchangeUrl = `${authUrl}/api/v2/public/external-application/auth/oauth2/user/token`
+    const tokenExchangeUrl = `${baseUrl}/api/v2/public/external-application/auth/oauth2/user/token`
 
     let authRes: Response
     try {
@@ -287,7 +305,7 @@ export async function POST(req: Request) {
     })
 
     try {
-      const tenantUrl = `${authUrl}/api/v2/tenant`
+      const tenantUrl = `${baseUrl}/api/v2/tenant`
 
       const tenantRes = await fetch(tenantUrl, {
         method: "GET",

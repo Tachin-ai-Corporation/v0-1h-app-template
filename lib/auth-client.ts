@@ -90,14 +90,12 @@ export function getRefreshToken(): string | null {
 }
 
 /**
- * Gets the 1health base URL from cookies or environment
+ * Gets the 1health base URL from cookies.
+ * The URL is set per-environment (demo/prod) during authentication.
  */
 export function getOneHealthBaseUrl(): string {
   const cookieUrl = getCookie("onehealth_base_url")
   if (cookieUrl) return cookieUrl
-
-  const envUrl = process.env.NEXT_PUBLIC_1H_URL
-  if (envUrl) return envUrl
 
   throw new Error("No 1health base URL available. User must authenticate via /auth first.")
 }
