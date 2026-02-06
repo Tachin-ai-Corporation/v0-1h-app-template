@@ -26,10 +26,9 @@ All 1health API calls are made directly from the browser using `authFetch()` fro
 │    - Cookie utilities                                           │
 │                                                                 │
 │  lib/api/*.ts                                                   │
-│    - config.ts - API version and endpoint configuration         │
+│    - config.ts - API version docs and default headers           │
 │    - query.ts - Generic query API                               │
 │    - user.ts - Current user info (fetchMyself)                  │
-│    - types.ts - Shared TypeScript types                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -155,19 +154,25 @@ try {
 }
 ```
 
-## Using SWR for Data Fetching
+## Data Fetching in Components
 
-Use the `useFetch` hook from `lib/hooks/use-fetch.ts` for SWR-based data fetching in components:
+For data fetching in components, use the `swr` package (included in dependencies) with `authFetch`:
 
 ```typescript
-import { useFetch } from "@/lib/hooks/use-fetch"
+import useSWR from "swr"
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
 function MyComponent() {
-  const { data, error, isLoading, mutate } = useFetch("/api/v3/my-endpoint")
-  
+  const { data, error, isLoading } = useSWR("my-data-key", async () => {
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/some-endpoint`)
+    if (!response.ok) throw new Error(`API error: ${response.status}`)
+    return response.json()
+  })
+
   if (isLoading) return <div>Loading...</div>
   if (error) return <div>Error: {error.message}</div>
-  
+
   return <div>{JSON.stringify(data)}</div>
 }
 ```

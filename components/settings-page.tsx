@@ -256,7 +256,7 @@ export function SettingsPage() {
           </CardHeader>
           <CardContent>
             {refreshStatus === "success" && (
-              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md flex items-center gap-2 text-green-600 dark:text-green-400">
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-md flex items-center gap-2 text-green-400">
                 <CheckCircle className="h-4 w-4" />
                 <span className="text-sm">Token refreshed successfully</span>
               </div>

@@ -28,15 +28,11 @@ export async function fetchMyself(): Promise<MyselfResult> {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/user/myself`
 
-    console.log("[v0] fetchMyself - raw cookie value:", document.cookie.match(/onehealth_base_url=([^;]*)/)?.[1])
-    console.log("[v0] fetchMyself - getOneHealthBaseUrl() returned:", baseUrl)
-    console.log("[v0] fetchMyself - constructed URL:", url)
-
     const response = await authFetch(url, { method: "GET" })
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("[v0] fetchMyself error:", response.status, errorText)
+      console.error("[1health API] fetchMyself error:", response.status, errorText)
       return { success: false, error: `Failed to fetch user info: ${response.status}` }
     }
 
@@ -56,7 +52,7 @@ export async function fetchMyself(): Promise<MyselfResult> {
       },
     }
   } catch (error) {
-    console.error("[v0] fetchMyself exception:", error)
+    console.error("[1health API] fetchMyself exception:", error)
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

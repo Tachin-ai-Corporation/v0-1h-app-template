@@ -120,23 +120,6 @@ export function getUserId(): number | null {
   return Number.isNaN(userId) ? null : userId
 }
 
-/**
- * Gets the workflow owner tenant ID from cookies
- */
-export function getWorkflowOwnerTenantId(): number | null {
-  const tenantIdCookie = getCookie("workflow_owner_tenant_id")
-  if (!tenantIdCookie) return null
-  const tenantId = Number.parseInt(tenantIdCookie, 10)
-  return Number.isNaN(tenantId) ? null : tenantId
-}
-
-/**
- * Sets the workflow owner tenant ID cookie
- */
-export function setWorkflowOwnerTenantIdCookie(tenantId: number): void {
-  setCookie("workflow_owner_tenant_id", tenantId.toString(), 60 * 60 * 24 * 7) // 7 days
-}
-
 // ============================================================================
 // DEBUG LOGGING
 // ============================================================================

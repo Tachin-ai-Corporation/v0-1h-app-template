@@ -31,17 +31,12 @@ lib/
   auth-client.ts     # Client-side auth: authFetch(), refreshToken(), cookies
   auth-server.ts     # Server-side auth helpers
   api/
-    config.ts        # API version and endpoint configuration
-    index.ts         # Barrel exports
+    config.ts        # API version docs and default headers
     query.ts         # Generic query API
-    types.ts         # Shared TypeScript types
     user.ts          # Current user info (fetchMyself, isSystemAdmin)
-  hooks/
-    use-fetch.ts     # SWR-based data fetching hook
 
 hooks/
   use-session-expired.ts    # Session expiry detection
-  use-modal-back-button.ts  # Modal back-button handling
 
 docs/
   AUTH-ARCHITECTURE.md   # Authentication flow documentation

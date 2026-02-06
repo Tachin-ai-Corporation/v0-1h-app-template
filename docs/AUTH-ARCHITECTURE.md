@@ -68,7 +68,7 @@ Tokens are stored in browser cookies:
 | `refresh_token` | Used to obtain new access token | 7 days |
 | `token_expires_at` | Unix timestamp (seconds) | 7 days |
 | `onehealth_base_url` | Base URL for API calls (set per environment) | 30 days |
-| `environment` | Selected environment: `demo` or `prod` | 30 days |
+| `onehealth_environment` | Selected environment: `demo` or `prod` | 30 days |
 | `user_id` | Current user's ID | 7 days |
 | `user_org_id` | Current user's organization ID | 7 days |
 
