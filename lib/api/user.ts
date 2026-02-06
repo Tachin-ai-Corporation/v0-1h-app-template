@@ -28,6 +28,10 @@ export async function fetchMyself(): Promise<MyselfResult> {
     const baseUrl = getOneHealthBaseUrl()
     const url = `${baseUrl}/api/v2/user/myself`
 
+    console.log("[v0] fetchMyself - raw cookie value:", document.cookie.match(/onehealth_base_url=([^;]*)/)?.[1])
+    console.log("[v0] fetchMyself - getOneHealthBaseUrl() returned:", baseUrl)
+    console.log("[v0] fetchMyself - constructed URL:", url)
+
     const response = await authFetch(url, { method: "GET" })
 
     if (!response.ok) {
