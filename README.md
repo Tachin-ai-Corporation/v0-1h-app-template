@@ -6,7 +6,8 @@ A greenfield starter template for building front-end applications on top of the 
 
 - **Authentication** -- LPL-based SSO with environment selection (Demo/Prod) and automatic token refresh
 - **API Layer** -- `authFetch()` wrapper for all authenticated 1health API calls
-- **Settings Page** -- Displays user account info (from `fetchMyself()` API) and token management
+- **Session Context** -- `useSession()` provides cached user + tenant data to all components (fetched once on mount)
+- **Settings Page** -- Displays organization info, user account, and token management
 - **Documentation** -- Architecture docs for auth, API patterns, and debugging
 
 ## Project Structure
@@ -25,6 +26,7 @@ components/
   ui/                   # shadcn/ui components
 
 contexts/
+  session-context.tsx     # SessionProvider / useSession() - cached user + tenant data
   navigation-context.tsx  # Client-side navigation state and modal management
 
 lib/
@@ -34,6 +36,7 @@ lib/
     config.ts        # API version docs and default headers
     query.ts         # Generic query API
     user.ts          # Current user info (fetchMyself, isSystemAdmin)
+    tenant.ts        # Tenant/org config (fetchTenantConfig)
 
 hooks/
   use-session-expired.ts    # Session expiry detection

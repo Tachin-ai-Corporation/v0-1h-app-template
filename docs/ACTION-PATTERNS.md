@@ -29,6 +29,10 @@ All 1health API calls are made directly from the browser using `authFetch()` fro
 │    - config.ts - API version docs and default headers           │
 │    - query.ts - Generic query API                               │
 │    - user.ts - Current user info (fetchMyself)                  │
+│    - tenant.ts - Tenant/org config (fetchTenantConfig)          │
+│                                                                 │
+│  contexts/session-context.tsx                                    │
+│    - SessionProvider / useSession() - Cached user + tenant data │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -153,6 +157,34 @@ try {
   throw error
 }
 ```
+
+## Session Context (User + Tenant Data)
+
+The `SessionProvider` in `contexts/session-context.tsx` fetches user and tenant data once on mount
+and makes it available to all descendant components via `useSession()`. This avoids repeated API calls.
+
+```typescript
+import { useSession } from "@/contexts/session-context"
+
+function MyComponent() {
+  const { user, tenant, isLoading, error, refresh } = useSession()
+
+  if (isLoading) return <div>Loading...</div>
+  if (!user) return null
+
+  return (
+    <div>
+      <p>Hello, {user.firstName}!</p>
+      <p>Org: {tenant?.tenantName}</p>
+    </div>
+  )
+}
+```
+
+The `SessionProvider` wraps the app in `home-page-client.tsx`. Available data:
+- `user` -- `UserInfo` from `/api/v2/user/myself` (name, email, roles, tenant context, etc.)
+- `tenant` -- `TenantConfig` from `/api/v2/tenant/sys-config` (org name, logo, brand colors, contacts, address, etc.)
+- `refresh()` -- Re-fetches both user and tenant data
 
 ## Data Fetching in Components
 
