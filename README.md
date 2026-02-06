@@ -4,11 +4,9 @@ A greenfield starter template for building front-end applications on top of the 
 
 ## What's Included
 
-- **Authentication** -- LPL-based SSO with automatic token refresh and session management
+- **Authentication** -- LPL-based SSO with environment selection (Demo/Prod) and automatic token refresh
 - **API Layer** -- `authFetch()` wrapper for all authenticated 1health API calls
-- **Navigation** -- SPA-style client-side routing with browser history support
-- **App Shell** -- Configurable layout with sidebar navigation, header, and theme toggle
-- **Settings Page** -- Displays user account info and token management
+- **Settings Page** -- Displays user account info (from `fetchMyself()` API) and token management
 - **Documentation** -- Architecture docs for auth, API patterns, and debugging
 
 ## Project Structure
@@ -16,25 +14,22 @@ A greenfield starter template for building front-end applications on top of the 
 ```
 app/
   api/token/         # Server-side LPL decryption and token exchange
-  auth/              # Authentication page (LPL entry point)
+  auth/              # Authentication page with environment selector
   page.tsx           # Auth guard, redirects to auth or renders app
-  layout.tsx         # Root layout with providers
+  layout.tsx         # Root layout with providers (dark mode only)
 
 components/
-  app-shell.tsx      # Main layout shell with sidebar + header
-  header.tsx         # Configurable app header
-  home-page-client.tsx  # Main client-side routing (register pages here)
-  settings-page.tsx  # User account info + token management
-  pages/
-    home-page.tsx    # Starter home page (replace with your own)
-  ui/                # shadcn/ui components
+  home-page-client.tsx  # Main client entry point (add pages here)
+  settings-page.tsx     # User account info + token management (current home page)
+  auth-exit-dialog.tsx  # Dialog for returning to 1health portal
+  ui/                   # shadcn/ui components
 
 contexts/
-  navigation-context.tsx  # Client-side navigation state
+  navigation-context.tsx  # Client-side navigation state and modal management
 
 lib/
   auth-client.ts     # Client-side auth: authFetch(), refreshToken(), cookies
-  auth-server.ts     # Server-side auth: LPL decryption
+  auth-server.ts     # Server-side auth helpers
   api/
     config.ts        # API version and endpoint configuration
     index.ts         # Barrel exports
@@ -45,7 +40,7 @@ lib/
     use-fetch.ts     # SWR-based data fetching hook
 
 hooks/
-  use-session-expired.ts  # Session expiry detection
+  use-session-expired.ts    # Session expiry detection
   use-modal-back-button.ts  # Modal back-button handling
 
 docs/
@@ -59,56 +54,16 @@ docs/
 | Variable | Description |
 |---|---|
 | `APP_ID_DEMO` / `APP_ID_PROD` | Application ID for demo/production environments |
-| `NEXT_PUBLIC_1H_URL_DEMO` / `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL |
+| `NEXT_PUBLIC_1H_URL_DEMO` / `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL per environment |
 | `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect target |
 | `NEXT_PUBLIC_ENABLE_DEBUG_STREAM` | Enable API debug logging |
-| `ONEHEALTH_SECRET_KEY_DEMO` / `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key |
+| `ONEHEALTH_SECRET_KEY_DEMO` / `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key per environment |
 
 ## Quick Start
 
-### 1. Add a New Page
+### 1. Add API Functions
 
-Create a component in `components/pages/`:
-
-```tsx
-// components/pages/my-page.tsx
-"use client"
-
-export function MyPage() {
-  return <div className="p-6">My new page</div>
-}
-```
-
-### 2. Register the Page
-
-In `components/home-page-client.tsx`, add a nav item and a case in the view switch:
-
-```tsx
-import { FileText } from "lucide-react"
-import { MyPage } from "@/components/pages/my-page"
-
-const navItems: NavItem[] = [
-  { name: "Home", key: "home", icon: Home },
-  { name: "My Page", key: "my-page", icon: FileText },  // Add this
-  { name: "Settings", key: "settings", icon: Settings },
-]
-
-const renderCurrentPage = () => {
-  switch (currentView) {
-    case "my-page":
-      return <MyPage />  // Add this
-    case "settings":
-      return <SettingsPage />
-    case "home":
-    default:
-      return <StarterHomePage />
-  }
-}
-```
-
-### 3. Add API Functions
-
-Create API modules in `lib/api/` using `authFetch()`:
+Create API modules in `lib/api/` using `authFetch()` (see `lib/api/user.ts` as an example):
 
 ```typescript
 // lib/api/my-feature.ts
@@ -122,8 +77,12 @@ export async function fetchMyData() {
 }
 ```
 
+### 2. Build Your Pages
+
+Create components and wire them into `home-page-client.tsx`. The current single-page setup renders `SettingsPage` as the home page -- expand from there by adding routing logic (navigation context or Next.js routes).
+
 ## Documentation
 
-- `docs/AUTH-ARCHITECTURE.md` -- Authentication flow and token management
+- `docs/AUTH-ARCHITECTURE.md` -- Authentication flow, environment selection, and token management
 - `docs/ACTION-PATTERNS.md` -- API call patterns, `authFetch()` usage, and SWR integration
 - `docs/README-DEBUGGER.md` -- API debug logging and console output

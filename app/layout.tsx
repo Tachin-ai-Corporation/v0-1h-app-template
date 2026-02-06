@@ -26,16 +26,10 @@ export default function RootLayout({
         <style>{`
           :root {
             --destructive-foreground: oklch(0.985 0 0);
-            /* Made destructive color less saturated (softer red) */
-            --destructive: oklch(0.65 0.18 27.325);
-          }
-          .dark {
-            --destructive-foreground: oklch(0.985 0 0);
-            /* Made destructive color less saturated (softer red) */
             --destructive: oklch(0.65 0.18 27.325);
           }
         `}</style>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
           <NavigationProvider>
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
               {children}

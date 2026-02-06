@@ -161,7 +161,7 @@ export async function POST(req: Request) {
       path: "/",
     })
 
-    cookieStore.set("onehealth_base_url", encodeURIComponent(baseUrl), {
+    cookieStore.set("onehealth_base_url", baseUrl, {
       httpOnly: false,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
