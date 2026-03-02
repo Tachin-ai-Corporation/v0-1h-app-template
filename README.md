@@ -17,7 +17,7 @@ app/
   api/token/         # Server-side LPL decryption and token exchange
   auth/              # Authentication page with environment selector
   page.tsx           # Auth guard, redirects to auth or renders app
-  layout.tsx         # Root layout with providers (dark mode only)
+  layout.tsx         # Root layout with providers
 
 components/
   home-page-client.tsx  # Main client entry point (add pages here)
@@ -51,11 +51,13 @@ docs/
 
 | Variable | Description |
 |---|---|
-| `APP_ID_DEMO` / `APP_ID_PROD` | Application ID for demo/production environments |
-| `NEXT_PUBLIC_1H_URL_DEMO` / `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL per environment |
-| `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect target |
-| `NEXT_PUBLIC_ENABLE_DEBUG_STREAM` | Enable API debug logging |
-| `ONEHEALTH_SECRET_KEY_DEMO` / `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key per environment |
+| `ONEHEALTH_SECRET_KEY_DEMO` | Server-side LPL decryption key for demo environment |
+| `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key for production environment |
+| `NEXT_PUBLIC_1H_URL_DEMO` | 1health platform base URL for demo (default: `https://demo.1health.io`) |
+| `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL for production (default: `https://app.1health.io`) |
+| `APP_ID_DEMO` | Application ID for demo environment |
+| `APP_ID_PROD` | Application ID for production environment |
+| `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect route (default: `/`) |
 
 ## Quick Start
 
