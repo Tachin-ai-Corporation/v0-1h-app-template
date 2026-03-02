@@ -53,11 +53,11 @@ docs/
 |---|---|
 | `ONEHEALTH_SECRET_KEY_DEMO` | Server-side LPL decryption key for demo environment |
 | `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key for production environment |
-| `NEXT_PUBLIC_1H_URL_DEMO` | 1health platform base URL for demo (default: `https://demo.1health.io`) |
-| `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL for production (default: `https://app.1health.io`) |
 | `APP_ID_DEMO` | Application ID for demo environment |
 | `APP_ID_PROD` | Application ID for production environment |
 | `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect route (default: `/`) |
+
+Base URLs are hardcoded: `https://demo.1health.io` (demo) and `https://app.1health.io` (prod).
 
 ## Quick Start
 
