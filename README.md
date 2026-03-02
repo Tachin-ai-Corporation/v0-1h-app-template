@@ -27,14 +27,11 @@ components/
 
 contexts/
   session-context.tsx     # SessionProvider / useSession() - cached user + tenant data
-  navigation-context.tsx  # Client-side navigation state and modal management
+  navigation-context.tsx  # Auth exit dialog state
 
 lib/
   auth-client.ts     # Client-side auth: authFetch(), refreshToken(), cookies
-  auth-server.ts     # Server-side auth helpers
   api/
-    config.ts        # API version docs and default headers
-    query.ts         # Generic query API
     user.ts          # Current user info (fetchMyself, isSystemAdmin)
     tenant.ts        # Tenant/org config (fetchTenantConfig)
 
