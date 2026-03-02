@@ -141,7 +141,7 @@ export function SettingsPage() {
   // Derived org display values
   const orgName = tenant?.tenantName ?? org?.name ?? null
   const orgShortName = org?.shortOrganizationName ?? null
-  const logoUrl = tenant?.tenantDarkLogo?.publicUrl ?? tenant?.tenantLogo?.publicUrl ?? null
+  const logoUrl = tenant?.tenantLogo?.publicUrl ?? tenant?.tenantDarkLogo?.publicUrl ?? null
   const orgTypes = org?.type ?? []
   const hqAddress = org?.headquarterAddress ?? null
   const primaryContact = org?.personContacts?.find((c) => c.contactTypes?.includes("Primary")) ?? org?.personContacts?.[0] ?? null

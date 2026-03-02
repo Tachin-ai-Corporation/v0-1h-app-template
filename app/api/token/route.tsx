@@ -59,8 +59,8 @@ function getEnvConfig(environment: Environment) {
 
   const baseUrl =
     environment === "demo"
-      ? process.env.NEXT_PUBLIC_1H_URL_DEMO || "https://demo.1health.io"
-      : process.env.NEXT_PUBLIC_1H_URL_PROD || "https://app.1health.io"
+      ? "https://demo.1health.io"
+      : "https://app.1health.io"
 
   const appId =
     environment === "demo"

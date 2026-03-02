@@ -17,7 +17,7 @@ app/
   api/token/         # Server-side LPL decryption and token exchange
   auth/              # Authentication page with environment selector
   page.tsx           # Auth guard, redirects to auth or renders app
-  layout.tsx         # Root layout with providers (dark mode only)
+  layout.tsx         # Root layout with providers
 
 components/
   home-page-client.tsx  # Main client entry point (add pages here)
@@ -27,14 +27,11 @@ components/
 
 contexts/
   session-context.tsx     # SessionProvider / useSession() - cached user + tenant data
-  navigation-context.tsx  # Client-side navigation state and modal management
+  navigation-context.tsx  # Auth exit dialog state
 
 lib/
   auth-client.ts     # Client-side auth: authFetch(), refreshToken(), cookies
-  auth-server.ts     # Server-side auth helpers
   api/
-    config.ts        # API version docs and default headers
-    query.ts         # Generic query API
     user.ts          # Current user info (fetchMyself, isSystemAdmin)
     tenant.ts        # Tenant/org config (fetchTenantConfig)
 
@@ -51,11 +48,13 @@ docs/
 
 | Variable | Description |
 |---|---|
-| `APP_ID_DEMO` / `APP_ID_PROD` | Application ID for demo/production environments |
-| `NEXT_PUBLIC_1H_URL_DEMO` / `NEXT_PUBLIC_1H_URL_PROD` | 1health platform base URL per environment |
-| `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect target |
-| `NEXT_PUBLIC_ENABLE_DEBUG_STREAM` | Enable API debug logging |
-| `ONEHEALTH_SECRET_KEY_DEMO` / `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key per environment |
+| `ONEHEALTH_SECRET_KEY_DEMO` | Server-side LPL decryption key for demo environment |
+| `ONEHEALTH_SECRET_KEY_PROD` | Server-side LPL decryption key for production environment |
+| `APP_ID_DEMO` | Application ID for demo environment |
+| `APP_ID_PROD` | Application ID for production environment |
+| `NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE` | Post-authentication redirect route (default: `/`) |
+
+Base URLs are hardcoded: `https://demo.1health.io` (demo) and `https://app.1health.io` (prod).
 
 ## Quick Start
 

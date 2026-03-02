@@ -8,12 +8,12 @@ The app uses OAuth2 tokens obtained through a secure Launch Payload (LPL) flow. 
 
 ## Environment Selection
 
-The auth page supports two environments: **Demo** and **Production**. Each uses its own set of environment variables:
+The auth page supports two environments: **Demo** and **Production**. Each uses its own secret key and hardcoded base URL:
 
 | Environment | Secret Key | Base URL |
 |-------------|------------|----------|
-| Demo | `ONEHEALTH_SECRET_KEY_DEMO` | `NEXT_PUBLIC_1H_URL_DEMO` |
-| Production | `ONEHEALTH_SECRET_KEY_PROD` | `NEXT_PUBLIC_1H_URL_PROD` |
+| Demo | `ONEHEALTH_SECRET_KEY_DEMO` | `https://demo.1health.io` |
+| Production | `ONEHEALTH_SECRET_KEY_PROD` | `https://app.1health.io` |
 
 Environment is auto-detected from `document.referrer`:
 - Referrer containing `demo.1health` selects **Demo**

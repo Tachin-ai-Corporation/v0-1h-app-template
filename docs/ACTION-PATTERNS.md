@@ -26,8 +26,6 @@ All 1health API calls are made directly from the browser using `authFetch()` fro
 │    - Cookie utilities                                           │
 │                                                                 │
 │  lib/api/*.ts                                                   │
-│    - config.ts - API version docs and default headers           │
-│    - query.ts - Generic query API                               │
 │    - user.ts - Current user info (fetchMyself)                  │
 │    - tenant.ts - Tenant/org config (fetchTenantConfig)          │
 │                                                                 │
@@ -95,34 +93,6 @@ export async function fetchMyData(): Promise<MyDataResult> {
     return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }
-```
-
-## Generic Query (`lib/api/query.ts`)
-
-```typescript
-import { executeQuery } from "@/lib/api/query"
-
-const result = await executeQuery({
-  key: "Person",
-  attributes: ["id", "firstName", "lastName"],
-  filter: "firstName==John",
-  limit: 10,
-})
-```
-
-## Query Relationship Key Format
-
-When building queries with relationships, the relationship key must follow this format:
-
-```
-{FromType}.{relKey}.{ToType}
-```
-
-**IMPORTANT:** Use the `relKey` from the API response, not a constructed name.
-
-Example:
-```
-WorkflowTemplate.WorkflowTemplateStepIsRootOfWorkflowTemplate.WorkflowTemplateStep
 ```
 
 ## Token Refresh

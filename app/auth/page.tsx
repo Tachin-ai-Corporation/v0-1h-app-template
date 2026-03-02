@@ -1,10 +1,10 @@
 "use client"
 
 import type React from "react"
-
+import Image from "next/image"
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { AlertCircle, Loader2, CheckCircle2, ExternalLink } from "lucide-react"
+import { AlertCircle, CheckCircle2, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,16 +24,6 @@ const ENV_URLS: Record<Environment, string> = {
   prod: "https://app.1health.io",
 }
 
-function getOneHealthUrlFromCookie(): string | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie.match(/onehealth_base_url=([^;]+)/)
-  return match ? decodeURIComponent(match[1]) : null
-}
-
-/**
- * Detects the environment from document.referrer.
- * Returns "demo" if referrer contains "demo.1health", "prod" if "app.1health", or null.
- */
 function detectEnvironmentFromReferrer(): Environment | null {
   if (typeof document === "undefined" || !document.referrer) return null
   try {
@@ -46,15 +36,64 @@ function detectEnvironmentFromReferrer(): Environment | null {
   return null
 }
 
-/**
- * Detects environment from a stored cookie.
- */
 function getEnvironmentFromCookie(): Environment | null {
   if (typeof document === "undefined") return null
   const match = document.cookie.match(/onehealth_environment=([^;]+)/)
   if (!match) return null
   const value = decodeURIComponent(match[1])
   return value === "demo" || value === "prod" ? value : null
+}
+
+// Animated logo component with state transitions
+function AnimatedLogo({ state }: { state: "idle" | "loading" | "success" }) {
+  const [showCheck, setShowCheck] = useState(false)
+  const [logoHidden, setLogoHidden] = useState(false)
+
+  useEffect(() => {
+    if (state === "success") {
+      // Start shrinking the logo
+      const shrinkTimer = setTimeout(() => {
+        setLogoHidden(true)
+      }, 50)
+      // Show checkmark after logo shrinks
+      const checkTimer = setTimeout(() => {
+        setShowCheck(true)
+      }, 350)
+      return () => {
+        clearTimeout(shrinkTimer)
+        clearTimeout(checkTimer)
+      }
+    }
+  }, [state])
+
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center">
+      {/* Logo - pulses during loading, shrinks on success */}
+      <div
+        className={`absolute inset-0 flex items-center justify-center transition-all ${
+          state === "loading" ? "animate-pulse-subtle" : ""
+        } ${logoHidden ? "animate-shrink-out" : ""}`}
+      >
+        <Image
+          src="/1h-icon.png"
+          alt="1health"
+          width={96}
+          height={96}
+          className="rounded-2xl shadow-lg"
+          priority
+        />
+      </div>
+
+      {/* Checkmark - pops in after logo shrinks */}
+      {showCheck && (
+        <div className="absolute inset-0 flex items-center justify-center animate-pop-in">
+          <div className="w-20 h-20 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+            <CheckCircle2 className="w-12 h-12 text-white" />
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function AuthContent() {
@@ -74,27 +113,22 @@ function AuthContent() {
       setEnvironment(fromReferrer)
       return
     }
-
     const fromCookie = getEnvironmentFromCookie()
     if (fromCookie) {
       setEnvironment(fromCookie)
-      return
     }
-
-    // No auto-detection possible -- user will choose manually
   }, [])
 
-  // Persist environment choice to cookie and set the onehealth_base_url cookie
+  // Persist environment choice to cookie
   useEffect(() => {
     if (!environment) return
     const secure = window.location.protocol === "https:" ? "; Secure" : ""
     document.cookie = `onehealth_environment=${environment}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure}`
-
     const baseUrl = ENV_URLS[environment]
-    document.cookie = `onehealth_base_url=${encodeURIComponent(baseUrl)}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure}`
+    document.cookie = `onehealth_base_url=${baseUrl}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure}`
   }, [environment])
 
-  // Once environment is set and we have an LPL, process it
+  // Process LPL when ready
   useEffect(() => {
     if (environment && lpl) {
       processLpl(lpl)
@@ -140,7 +174,7 @@ function AuthContent() {
 
       setTimeout(() => {
         router.push(redirectRoute)
-      }, 500)
+      }, 1200) // Allow time for success animation
     } catch {
       setAuthState("error")
       setError({
@@ -162,9 +196,21 @@ function AuthContent() {
   // Environment selection screen
   if (!environment && authState !== "loading" && authState !== "success") {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <Card>
+          {/* Logo at top of environment selection */}
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/1h-icon.png"
+              alt="1health"
+              width={80}
+              height={80}
+              className="rounded-2xl shadow-lg"
+              priority
+            />
+          </div>
+
+          <Card className="border-border">
             <CardHeader className="text-center">
               <CardTitle className="text-2xl">Choose Environment</CardTitle>
               <CardDescription>
@@ -195,12 +241,12 @@ function AuthContent() {
                 <ExternalLink className="h-4 w-4 text-muted-foreground" />
               </Button>
 
-              <div className="relative">
+              <div className="relative my-2">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                  <span className="bg-background px-2 text-muted-foreground">Or</span>
                 </div>
               </div>
 
@@ -226,32 +272,45 @@ function AuthContent() {
     )
   }
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
-        {authState === "loading" && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <div>
-              <h2 className="text-xl font-semibold">Authenticating...</h2>
+  // Loading and success states with animated logo
+  if (authState === "loading" || authState === "success") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <AnimatedLogo state={authState} />
+        <div className="mt-6 text-center">
+          {authState === "loading" && (
+            <>
+              <h2 className="text-xl font-semibold text-foreground">Authenticating...</h2>
               <p className="text-muted-foreground mt-1">
-                Connecting to {environment === "demo" ? "Demo" : "Production"} environment.
+                Connecting to {environment === "demo" ? "Demo" : "Production"} environment
               </p>
-            </div>
-          </div>
-        )}
-
-        {authState === "success" && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <CheckCircle2 className="h-12 w-12 text-green-500" />
-            <div>
-              <h2 className="text-xl font-semibold">Authentication Successful</h2>
+            </>
+          )}
+          {authState === "success" && (
+            <>
+              <h2 className="text-xl font-semibold text-foreground">Success!</h2>
               <p className="text-muted-foreground mt-1">Redirecting you now...</p>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
 
-        {authState === "error" && error && (
+  // Error state
+  if (authState === "error" && error) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/1h-icon.png"
+              alt="1health"
+              width={64}
+              height={64}
+              className="rounded-xl shadow-md opacity-50"
+            />
+          </div>
           <div className="flex flex-col gap-4">
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
@@ -282,15 +341,32 @@ function AuthContent() {
               )}
             </div>
           </div>
-        )}
+        </div>
+      </div>
+    )
+  }
 
-        {authState === "manual-entry" && (
-          <Card>
+  // Manual entry state
+  if (authState === "manual-entry") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-8">
+            <Image
+              src="/1h-icon.png"
+              alt="1health"
+              width={64}
+              height={64}
+              className="rounded-xl shadow-md"
+            />
+          </div>
+
+          <Card className="border-border">
             <CardHeader>
               <CardTitle>Authentication Required</CardTitle>
               <CardDescription>
                 Connected to <span className="font-medium">{environment === "demo" ? "Demo" : "Production"}</span> environment.
-                No launch payload detected. Paste an LPL below or return to 1health to login.
+                No launch payload detected.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -310,7 +386,7 @@ function AuthContent() {
                 </Button>
               </form>
 
-              <div className="relative">
+              <div className="relative my-2">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t" />
                 </div>
@@ -342,15 +418,16 @@ function AuthContent() {
               </div>
             </CardContent>
           </Card>
-        )}
-
-        {authState === "idle" && environment && (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-muted-foreground">Initializing...</p>
-          </div>
-        )}
+        </div>
       </div>
+    )
+  }
+
+  // Idle state (initializing)
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+      <AnimatedLogo state="loading" />
+      <p className="text-muted-foreground mt-6">Initializing...</p>
     </div>
   )
 }
@@ -359,8 +436,15 @@ export default function Auth() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-background flex items-center justify-center p-6">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+          <Image
+            src="/1h-icon.png"
+            alt="1health"
+            width={96}
+            height={96}
+            className="rounded-2xl shadow-lg animate-pulse-subtle"
+            priority
+          />
         </div>
       }
     >
