@@ -289,7 +289,7 @@ function AuthContent() {
           {authState === "success" && (
             <>
               <h2 className="text-xl font-semibold text-foreground">Success!</h2>
-              <p className="text-muted-foreground mt-1">Redirecting you now...</p>
+              <p className="text-muted-foreground mt-1">Loading app...</p>
             </>
           )}
         </div>

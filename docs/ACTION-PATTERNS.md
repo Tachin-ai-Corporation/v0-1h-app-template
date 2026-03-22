@@ -156,16 +156,22 @@ The `SessionProvider` wraps the app in `home-page-client.tsx`. Available data:
 - `tenant` -- `TenantConfig` from `/api/v2/tenant/sys-config` (org name, logo, brand colors, contacts, address, etc.)
 - `refresh()` -- Re-fetches both user and tenant data
 
-## Data Fetching in Components
+## Data Fetching with SWR (Required Pattern)
 
-For data fetching in components, use the `swr` package (included in dependencies) with `authFetch`:
+**IMPORTANT:** All client-side API fetching MUST use SWR to prevent duplicate requests.
+
+React Strict Mode (enabled in development) intentionally double-invokes effects to detect side effects.
+Using raw `useEffect` + `fetch` will cause duplicate API calls. SWR automatically deduplicates
+concurrent requests to the same key, making only one network request and sharing the result.
+
+### Basic Pattern
 
 ```typescript
 import useSWR from "swr"
 import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
 
 function MyComponent() {
-  const { data, error, isLoading } = useSWR("my-data-key", async () => {
+  const { data, error, isLoading, mutate } = useSWR("my-data-key", async () => {
     const baseUrl = getOneHealthBaseUrl()
     const response = await authFetch(`${baseUrl}/api/v2/some-endpoint`)
     if (!response.ok) throw new Error(`API error: ${response.status}`)
@@ -177,4 +183,67 @@ function MyComponent() {
 
   return <div>{JSON.stringify(data)}</div>
 }
+```
+
+### SWR Configuration Options
+
+Configure deduplication to prevent duplicate requests while still allowing fresh data after mutations:
+
+```typescript
+const { data } = useSWR(
+  "session-user",
+  fetchMyself,
+  {
+    dedupingInterval: 2000,       // Dedupe requests within 2 seconds (allows fresh fetch after POST)
+    revalidateOnFocus: false,     // Don't refetch when window regains focus
+    revalidateOnReconnect: false, // Don't refetch on network reconnect
+  }
+)
+```
+
+### Dependent Fetching (Chained Requests)
+
+When one request depends on another's result, use conditional keys:
+
+```typescript
+// Fetch user first
+const { data: user } = useSWR("session-user", fetchUser)
+
+// Only fetch tenant config after we have the user's tenant ID
+const { data: tenant } = useSWR(
+  user?.tenantContext?.id ? `tenant-${user.tenantContext.id}` : null,
+  () => fetchTenantConfig(user!.tenantContext.id)
+)
+```
+
+Passing `null` as the key prevents the request from firing until the dependency is ready.
+
+### Global State via SWR
+
+The `SessionProvider` uses this pattern to provide cached user + tenant data app-wide:
+
+```typescript
+// contexts/session-context.tsx
+const { data: userData } = useSWR("session-user", fetchSessionUser, {
+  dedupingInterval: 2000,
+  revalidateOnFocus: false,
+})
+
+const { data: tenantData } = useSWR(
+  userData?.user ? `session-tenant-${userData.user.tenantContext.id}` : null,
+  () => fetchSessionTenant(userData!.user.tenantContext.id),
+  { dedupingInterval: 2000, revalidateOnFocus: false }
+)
+```
+
+### DO NOT use raw useEffect for fetching
+
+```typescript
+// BAD - Will cause duplicate requests in Strict Mode
+useEffect(() => {
+  fetchMyData().then(setData)
+}, [])
+
+// GOOD - SWR handles deduplication automatically
+const { data } = useSWR("my-data", fetchMyData)
 ```
