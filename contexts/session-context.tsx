@@ -61,7 +61,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   } = useSWR("session:user", userFetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
-    dedupingInterval: 60000, // Dedupe for 60 seconds
+    dedupingInterval: 2000, // Dedupe for 2 seconds - allows fresh fetches after POST
   })
 
   // Extract tenant ID from user data
@@ -78,7 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     {
       revalidateOnFocus: false,
       revalidateOnReconnect: false,
-      dedupingInterval: 60000,
+      dedupingInterval: 2000,
     }
   )
 

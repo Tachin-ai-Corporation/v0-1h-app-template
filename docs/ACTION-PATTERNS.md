@@ -187,14 +187,14 @@ function MyComponent() {
 
 ### SWR Configuration Options
 
-For shared/global data that rarely changes, configure deduplication and revalidation:
+Configure deduplication to prevent duplicate requests while still allowing fresh data after mutations:
 
 ```typescript
 const { data } = useSWR(
   "session-user",
   fetchMyself,
   {
-    dedupingInterval: 60000,      // Dedupe requests within 60 seconds
+    dedupingInterval: 2000,       // Dedupe requests within 2 seconds (allows fresh fetch after POST)
     revalidateOnFocus: false,     // Don't refetch when window regains focus
     revalidateOnReconnect: false, // Don't refetch on network reconnect
   }
@@ -225,14 +225,14 @@ The `SessionProvider` uses this pattern to provide cached user + tenant data app
 ```typescript
 // contexts/session-context.tsx
 const { data: userData } = useSWR("session-user", fetchSessionUser, {
-  dedupingInterval: 60000,
+  dedupingInterval: 2000,
   revalidateOnFocus: false,
 })
 
 const { data: tenantData } = useSWR(
   userData?.user ? `session-tenant-${userData.user.tenantContext.id}` : null,
   () => fetchSessionTenant(userData!.user.tenantContext.id),
-  { dedupingInterval: 60000, revalidateOnFocus: false }
+  { dedupingInterval: 2000, revalidateOnFocus: false }
 )
 ```
 
