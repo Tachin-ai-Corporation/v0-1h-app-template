@@ -1,0 +1,249 @@
+# Client-Side API Patterns
+
+This document describes patterns for making 1health API calls from the client side.
+
+## Architecture Overview
+
+All 1health API calls are made directly from the browser using `authFetch()` from `lib/auth-client.ts`. The only server-side operation is the initial LPL decryption and token exchange.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      SERVER-SIDE (Minimal)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  /api/token (POST)                                              │
+│    - Decrypts LPL using ONEHEALTH_SECRET_KEY_DEMO or _PROD      │
+│    - Environment selected by user on /auth page                 │
+│    - Exchanges one-time code for OAuth tokens                   │
+│    - Sets cookies (access_token, refresh_token, environment)    │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                      CLIENT-SIDE (All API calls)                │
+├─────────────────────────────────────────────────────────────────┤
+│  lib/auth-client.ts                                             │
+│    - authFetch() - Authenticated fetch wrapper                  │
+│    - refreshToken() - Direct token refresh with 1health         │
+│    - Cookie utilities                                           │
+│                                                                 │
+│  lib/api/*.ts                                                   │
+│    - user.ts - Current user info (fetchMyself)                  │
+│    - tenant.ts - Tenant/org config (fetchTenantConfig)          │
+│                                                                 │
+│  contexts/session-context.tsx                                    │
+│    - SessionProvider / useSession() - Cached user + tenant data │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Using authFetch
+
+`authFetch()` is the core utility for all authenticated API calls. It automatically attaches the Bearer token, handles 401 responses with transparent token refresh, and throws `SessionExpiredError` when refresh fails.
+
+```typescript
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+
+async function fetchData() {
+  const baseUrl = getOneHealthBaseUrl()
+  const response = await authFetch(`${baseUrl}/api/v2/some-endpoint`, {
+    method: "POST",
+    body: JSON.stringify({ key: "value" }),
+  })
+  
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`)
+  }
+  
+  return response.json()
+}
+```
+
+## Creating New API Modules
+
+When adding new API functionality, create a new file in `lib/api/`. Follow the pattern established in `lib/api/user.ts`:
+
+```typescript
+// lib/api/my-feature.ts
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+
+export interface MyData {
+  id: number
+  name: string
+}
+
+export interface MyDataResult {
+  success: boolean
+  data?: MyData[]
+  error?: string
+}
+
+export async function fetchMyData(): Promise<MyDataResult> {
+  try {
+    const baseUrl = getOneHealthBaseUrl()
+    const url = `${baseUrl}/api/v3/my-endpoint`
+
+    const response = await authFetch(url, { method: "GET" })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      return { success: false, error: `Failed: ${response.status}` }
+    }
+
+    const data = await response.json()
+    return { success: true, data }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
+```
+
+## Token Refresh
+
+Token refresh happens automatically:
+1. When `authFetch()` receives a 401 response
+2. When manually triggered via `refreshToken()`
+
+```typescript
+import { refreshToken } from "@/lib/auth-client"
+
+const success = await refreshToken()
+if (!success) {
+  // Redirect to login
+  window.location.href = "/auth"
+}
+```
+
+## Error Handling
+
+```typescript
+import { authFetch } from "@/lib/auth-client"
+
+try {
+  const response = await authFetch(url)
+  // Handle response
+} catch (error) {
+  if (error instanceof Error && error.message === "SESSION_EXPIRED") {
+    // Token refresh failed, redirect to login
+    window.location.href = "/auth"
+  }
+  throw error
+}
+```
+
+## Session Context (User + Tenant Data)
+
+The `SessionProvider` in `contexts/session-context.tsx` fetches user and tenant data once on mount
+and makes it available to all descendant components via `useSession()`. This avoids repeated API calls.
+
+```typescript
+import { useSession } from "@/contexts/session-context"
+
+function MyComponent() {
+  const { user, tenant, isLoading, error, refresh } = useSession()
+
+  if (isLoading) return <div>Loading...</div>
+  if (!user) return null
+
+  return (
+    <div>
+      <p>Hello, {user.firstName}!</p>
+      <p>Org: {tenant?.tenantName}</p>
+    </div>
+  )
+}
+```
+
+The `SessionProvider` wraps the app in `home-page-client.tsx`. Available data:
+- `user` -- `UserInfo` from `/api/v2/user/myself` (name, email, roles, tenant context, etc.)
+- `tenant` -- `TenantConfig` from `/api/v2/tenant/sys-config` (org name, logo, brand colors, contacts, address, etc.)
+- `refresh()` -- Re-fetches both user and tenant data
+
+## Data Fetching with SWR (Required Pattern)
+
+**IMPORTANT:** All client-side API fetching MUST use SWR to prevent duplicate requests.
+
+React Strict Mode (enabled in development) intentionally double-invokes effects to detect side effects.
+Using raw `useEffect` + `fetch` will cause duplicate API calls. SWR automatically deduplicates
+concurrent requests to the same key, making only one network request and sharing the result.
+
+### Basic Pattern
+
+```typescript
+import useSWR from "swr"
+import { authFetch, getOneHealthBaseUrl } from "@/lib/auth-client"
+
+function MyComponent() {
+  const { data, error, isLoading, mutate } = useSWR("my-data-key", async () => {
+    const baseUrl = getOneHealthBaseUrl()
+    const response = await authFetch(`${baseUrl}/api/v2/some-endpoint`)
+    if (!response.ok) throw new Error(`API error: ${response.status}`)
+    return response.json()
+  })
+
+  if (isLoading) return <div>Loading...</div>
+  if (error) return <div>Error: {error.message}</div>
+
+  return <div>{JSON.stringify(data)}</div>
+}
+```
+
+### SWR Configuration Options
+
+Configure deduplication to prevent duplicate requests while still allowing fresh data after mutations:
+
+```typescript
+const { data } = useSWR(
+  "session-user",
+  fetchMyself,
+  {
+    dedupingInterval: 2000,       // Dedupe requests within 2 seconds (allows fresh fetch after POST)
+    revalidateOnFocus: false,     // Don't refetch when window regains focus
+    revalidateOnReconnect: false, // Don't refetch on network reconnect
+  }
+)
+```
+
+### Dependent Fetching (Chained Requests)
+
+When one request depends on another's result, use conditional keys:
+
+```typescript
+// Fetch user first
+const { data: user } = useSWR("session-user", fetchUser)
+
+// Only fetch tenant config after we have the user's tenant ID
+const { data: tenant } = useSWR(
+  user?.tenantContext?.id ? `tenant-${user.tenantContext.id}` : null,
+  () => fetchTenantConfig(user!.tenantContext.id)
+)
+```
+
+Passing `null` as the key prevents the request from firing until the dependency is ready.
+
+### Global State via SWR
+
+The `SessionProvider` uses this pattern to provide cached user + tenant data app-wide:
+
+```typescript
+// contexts/session-context.tsx
+const { data: userData } = useSWR("session-user", fetchSessionUser, {
+  dedupingInterval: 2000,
+  revalidateOnFocus: false,
+})
+
+const { data: tenantData } = useSWR(
+  userData?.user ? `session-tenant-${userData.user.tenantContext.id}` : null,
+  () => fetchSessionTenant(userData!.user.tenantContext.id),
+  { dedupingInterval: 2000, revalidateOnFocus: false }
+)
+```
+
+### DO NOT use raw useEffect for fetching
+
+```typescript
+// BAD - Will cause duplicate requests in Strict Mode
+useEffect(() => {
+  fetchMyData().then(setData)
+}, [])
+
+// GOOD - SWR handles deduplication automatically
+const { data } = useSWR("my-data", fetchMyData)
+```

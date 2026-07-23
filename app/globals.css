@@ -1,0 +1,391 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   1health Design System
+   ----------------------------------------------------------------------------
+   Canonical source of truth (spec):
+   https://tachin-website.web.app/public/1health_design_system.md
+
+   Token architecture — three tiers:
+     1. Reference palette — the raw 1health named colors. Rarely touched.
+     2. Brand layer       — THE re-skin point. Repoint these four variables to
+                            your brand's hues to rebrand the app while keeping
+                            1health's structure, spacing, motion, and feel.
+     3. Semantic tokens   — what components actually consume (background,
+                            foreground, primary, ...), defined per light/dark.
+
+   Full guide + rebranding instructions: docs/DESIGN-SYSTEM.md
+   ============================================================================ */
+
+/* Class-based dark mode. Light is the default; add `class="dark"` to <html>. */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  color-scheme: light;
+
+  /* ---- TIER 1 · Reference palette (1health named colors) ------------------ */
+  /* Cool neutrals — the ~70% structural base of every composition */
+  --graphite: #202833;
+  --charcoal: #313b47;
+  --slate: #566373;
+  --mist: #aeb8c4;
+  --cloud: #e6ebf0;
+
+  /* Healthcare / platform accents — ~20%, for brand recognition */
+  --trust-blue: #246b8f;
+  --network-teal: #1f9a9b;
+  --care-mint: #5fc7b2;
+  --signal-aqua: #8fd8e6;
+  --clinical-ice: #e8f7fa;
+
+  /* Action / emphasis — ~5%, used sparingly and never decoratively */
+  --pulse: #d84f45;
+  --coral: #e8786f;
+  --blush: #f2c8c3;
+  --amber: #d6a83a;
+  --glow-amber: #f5e6b8;
+
+  /* Functional status — ~5%, semantic meaning shared across every 1health app */
+  --status-success: #3baa78;
+  --status-info: #2f80a8;
+  --status-warning: #d6a83a;
+  --status-error: #d84f45;
+  --status-neutral: #7a8696;
+
+  /* ---- TIER 2 · Brand layer — REPOINT THESE FOUR TO REBRAND --------------- */
+  --brand-primary: var(--trust-blue); /* primary actions & identity      */
+  --brand-secondary: var(--network-teal); /* secondary emphasis              */
+  --brand-tertiary: var(--care-mint); /* supporting accent               */
+  --brand-highlight: var(--signal-aqua); /* focus glow / highlight source   */
+
+  /* ---- TIER 3 · Semantic tokens · LIGHT (default) ------------------------- */
+  --background: #f4f7fa;
+  --foreground: var(--graphite);
+  --card: #ffffff;
+  --card-foreground: var(--graphite);
+  --popover: #ffffff;
+  --popover-foreground: var(--graphite);
+
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: #eaeff4;
+  --secondary-foreground: var(--charcoal);
+  --muted: #edf1f5;
+  --muted-foreground: var(--slate);
+  --accent: var(--clinical-ice);
+  --accent-foreground: var(--graphite);
+  --destructive: var(--status-error);
+  --destructive-foreground: #ffffff;
+
+  --border: #e1e8ef;
+  --input: #e1e8ef;
+  --ring: var(--brand-primary);
+  --link: var(--status-info);
+
+  /* Status — base hue (fills / borders / icons) + AA-readable text variant */
+  --success: var(--status-success);
+  --success-strong: #1b7a4f;
+  --info: var(--status-info);
+  --info-strong: #256a8c;
+  --warning: var(--status-warning);
+  --warning-strong: #8a6511;
+  --error: var(--status-error);
+  --error-strong: #b23a31;
+
+  /* Data-viz — healthcare palette ordered to avoid "rainbow" dashboards */
+  --chart-1: var(--trust-blue);
+  --chart-2: var(--network-teal);
+  --chart-3: var(--care-mint);
+  --chart-4: var(--amber);
+  --chart-5: var(--coral);
+
+  /* Radius — spec scale (sm 6 · md 10 · lg 16 · xl 24). Base = card radius. */
+  --radius: 16px;
+
+  /* Elevation — canonical spec shadows for raised surfaces / overlays */
+  --elevation-1: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --elevation-2: 0 8px 28px rgba(0, 0, 0, 0.24);
+  --elevation-3: 0 16px 48px rgba(0, 0, 0, 0.32);
+  /* Focus / active glow (Signal Aqua) — the only decorative glow allowed */
+  --glow: 0 0 0 1px rgba(143, 216, 230, 0.32), 0 0 24px rgba(143, 216, 230, 0.18);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* ---- TIER 3 · Semantic tokens · DARK (command-center) ------------------- */
+  --background: var(--graphite);
+  --foreground: var(--cloud);
+  --card: #29333f;
+  --card-foreground: var(--cloud);
+  --popover: #29333f;
+  --popover-foreground: var(--cloud);
+
+  --primary: var(--brand-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--charcoal);
+  --secondary-foreground: var(--cloud);
+  --muted: var(--charcoal);
+  --muted-foreground: var(--mist);
+  --accent: #2a3c46;
+  --accent-foreground: var(--clinical-ice);
+  --destructive: var(--status-error);
+  --destructive-foreground: #ffffff;
+
+  --border: #3a4552;
+  --input: #3a4552;
+  --ring: var(--brand-highlight);
+  --link: var(--signal-aqua);
+
+  /* Status text variants brightened for dark surfaces (AA) */
+  --success-strong: #5fcb98;
+  --info-strong: #6fb6d8;
+  --warning-strong: #e6c264;
+  --error-strong: #f08a80;
+}
+
+@theme inline {
+  /* Colors → utilities (bg-*, text-*, border-*, ring-*). Indirected through the
+     semantic vars above so every utility switches with light/dark automatically. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-link: var(--link);
+
+  /* Semantic status colors → utilities (bg-success, text-warning-strong, ...) */
+  --color-success: var(--success);
+  --color-success-strong: var(--success-strong);
+  --color-info: var(--info);
+  --color-info-strong: var(--info-strong);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-error: var(--error);
+  --color-error-strong: var(--error-strong);
+  --color-neutral: var(--status-neutral);
+
+  /* Brand hues exposed directly (e.g. bg-brand-primary, text-brand-secondary) */
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-tertiary: var(--brand-tertiary);
+  --color-brand-highlight: var(--brand-highlight);
+
+  /* Chart palette */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Typography — Inter + the 1health type scale (role → size / line-height / weight).
+     Usage: className="text-h1", "text-body", "text-caption", ... */
+  --font-sans: var(--font-inter), Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --text-display: 3.5rem; /* 56 / 64 */
+  --text-display--line-height: 4rem;
+  --text-display--font-weight: 700;
+  --text-h1: 2.5rem; /* 40 / 48 */
+  --text-h1--line-height: 3rem;
+  --text-h1--font-weight: 700;
+  --text-h2: 2rem; /* 32 / 40 */
+  --text-h2--line-height: 2.5rem;
+  --text-h2--font-weight: 600;
+  --text-h3: 1.5rem; /* 24 / 32 */
+  --text-h3--line-height: 2rem;
+  --text-h3--font-weight: 600;
+  --text-h4: 1.25rem; /* 20 / 28 */
+  --text-h4--line-height: 1.75rem;
+  --text-h4--font-weight: 600;
+  --text-body-lg: 1.125rem; /* 18 / 28 */
+  --text-body-lg--line-height: 1.75rem;
+  --text-body: 1rem; /* 16 / 24 */
+  --text-body--line-height: 1.5rem;
+  --text-body-sm: 0.875rem; /* 14 / 20 */
+  --text-body-sm--line-height: 1.25rem;
+  --text-caption: 0.75rem; /* 12 / 16 */
+  --text-caption--line-height: 1rem;
+
+  /* Radius — spec scale. Components: buttons/inputs = md, cards = lg. */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Shadows — subtle resting shadows (2xs–sm) + canonical spec elevations (md–xl).
+     Cards rest at shadow-sm; dialogs / popovers / menus use shadow-lg / shadow-xl.
+     shadow-glow is the focus/active aqua glow. */
+  --shadow-2xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: var(--elevation-1);
+  --shadow-lg: var(--elevation-2);
+  --shadow-xl: var(--elevation-3);
+  --shadow-glow: var(--glow);
+}
+
+@theme {
+  /* Motion — exposed as `ease-premium` / `ease-standard` utilities AND as real
+     custom properties for use in keyframe rules below. */
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1); /* 1health signature */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom animations for auth flow */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.02); opacity: 0.9; }
+}
+
+@keyframes shrink-out {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0); opacity: 0; }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s var(--ease-standard) infinite;
+}
+
+.animate-shrink-out {
+  animation: shrink-out 0.3s var(--ease-premium) forwards;
+}
+
+.animate-pop-in {
+  animation: pop-in 0.4s var(--ease-premium) forwards;
+}
+
+/* Animation keyframes for shadcn components */
+@keyframes enter {
+  from {
+    opacity: var(--tw-enter-opacity, 1);
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+      scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))
+      rotate(var(--tw-enter-rotate, 0));
+  }
+}
+
+@keyframes exit {
+  to {
+    opacity: var(--tw-exit-opacity, 1);
+    transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+      scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1))
+      rotate(var(--tw-exit-rotate, 0));
+  }
+}
+
+/* Animation utility classes */
+.animate-in {
+  animation-name: enter;
+  animation-duration: 150ms;
+  --tw-enter-opacity: initial;
+  --tw-enter-scale: initial;
+  --tw-enter-rotate: initial;
+  --tw-enter-translate-x: initial;
+  --tw-enter-translate-y: initial;
+}
+
+.animate-out {
+  animation-name: exit;
+  animation-duration: 150ms;
+  --tw-exit-opacity: initial;
+  --tw-exit-scale: initial;
+  --tw-exit-rotate: initial;
+  --tw-exit-translate-x: initial;
+  --tw-exit-translate-y: initial;
+}
+
+.fade-in { --tw-enter-opacity: 0; }
+.fade-in-0 { --tw-enter-opacity: 0; }
+.fade-in-50 { --tw-enter-opacity: 0.5; }
+.fade-in-80 { --tw-enter-opacity: 0.8; }
+.fade-out { --tw-exit-opacity: 0; }
+.fade-out-0 { --tw-exit-opacity: 0; }
+.fade-out-50 { --tw-exit-opacity: 0.5; }
+.fade-out-80 { --tw-exit-opacity: 0.8; }
+
+.zoom-in { --tw-enter-scale: 0; }
+.zoom-in-0 { --tw-enter-scale: 0; }
+.zoom-in-50 { --tw-enter-scale: 0.5; }
+.zoom-in-75 { --tw-enter-scale: 0.75; }
+.zoom-in-90 { --tw-enter-scale: 0.9; }
+.zoom-in-95 { --tw-enter-scale: 0.95; }
+.zoom-out { --tw-exit-scale: 0; }
+.zoom-out-0 { --tw-exit-scale: 0; }
+.zoom-out-50 { --tw-exit-scale: 0.5; }
+.zoom-out-75 { --tw-exit-scale: 0.75; }
+.zoom-out-90 { --tw-exit-scale: 0.9; }
+.zoom-out-95 { --tw-exit-scale: 0.95; }
+
+.slide-in-from-top { --tw-enter-translate-y: -100%; }
+.slide-in-from-top-2 { --tw-enter-translate-y: -0.5rem; }
+.slide-in-from-top-4 { --tw-enter-translate-y: -1rem; }
+.slide-in-from-top-full { --tw-enter-translate-y: -100%; }
+.slide-in-from-bottom { --tw-enter-translate-y: 100%; }
+.slide-in-from-bottom-2 { --tw-enter-translate-y: 0.5rem; }
+.slide-in-from-bottom-4 { --tw-enter-translate-y: 1rem; }
+.slide-in-from-bottom-full { --tw-enter-translate-y: 100%; }
+.slide-in-from-left { --tw-enter-translate-x: -100%; }
+.slide-in-from-left-2 { --tw-enter-translate-x: -0.5rem; }
+.slide-in-from-left-4 { --tw-enter-translate-x: -1rem; }
+.slide-in-from-right { --tw-enter-translate-x: 100%; }
+.slide-in-from-right-2 { --tw-enter-translate-x: 0.5rem; }
+.slide-in-from-right-4 { --tw-enter-translate-x: 1rem; }
+
+.slide-out-to-top { --tw-exit-translate-y: -100%; }
+.slide-out-to-top-2 { --tw-exit-translate-y: -0.5rem; }
+.slide-out-to-bottom { --tw-exit-translate-y: 100%; }
+.slide-out-to-bottom-2 { --tw-exit-translate-y: 0.5rem; }
+.slide-out-to-left { --tw-exit-translate-x: -100%; }
+.slide-out-to-left-2 { --tw-exit-translate-x: -0.5rem; }
+.slide-out-to-right { --tw-exit-translate-x: 100%; }
+.slide-out-to-right-2 { --tw-exit-translate-x: 0.5rem; }
+.slide-out-to-right-full { --tw-exit-translate-x: 100%; }
+
+.duration-150 { animation-duration: 150ms; }
+.duration-200 { animation-duration: 200ms; }
+.duration-300 { animation-duration: 300ms; }
+.duration-500 { animation-duration: 500ms; }
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Respect reduced-motion preferences (design system requirement) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
