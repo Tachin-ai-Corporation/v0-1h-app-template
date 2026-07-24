@@ -321,6 +321,54 @@ export interface ResolvedTemplate {
   version: "published" | "draft"
 }
 
+/**
+ * One node in a WorkflowTemplate's `rootNodes` step-tree DEFINITION. Steps are a
+ * (usually linear) sequence: each node nests its successor via `.node`; terminal
+ * nodes omit it. `availableStepId` is the shared step-type this node instantiates;
+ * `metadata` is canvas-only (position/style) — ignore it for logic.
+ */
+export interface WorkflowTemplateNode {
+  id: number
+  name: string
+  key: string
+  type?: string
+  nodeId?: string
+  availableStepId?: number
+  availableStepIsActive?: boolean
+  metadata?: Record<string, unknown>
+  /** Next step in sequence (linked-list style). Absent on terminal nodes. */
+  node?: WorkflowTemplateNode
+  [key: string]: unknown
+}
+
+/**
+ * GET /api/v2/health/workflow-template/{id} — a template's step-tree definition
+ * (the `rootNodes` linked list). Use `flattenTemplateNodes` to linearize it.
+ */
+export interface WorkflowTemplateDefinition {
+  id: number
+  name: string
+  rootNodes: WorkflowTemplateNode[]
+  stickyNotes?: unknown[]
+  [key: string]: unknown
+}
+
+/**
+ * The template refs a campaign points at — see WORKFLOWS.md § the template layers.
+ * Read from the campaign GET (`baseWorkflowTemplate`, `workflowTemplateGroup`,
+ * `previousBaseWorkflowTemplates`).
+ */
+export interface CampaignTemplateRefs {
+  campaignId: number
+  /** CAMPAIGN BASE: the clone this campaign's NEW journeys copy from. Editing it → future journeys. */
+  baseWorkflowTemplateId: number | null
+  /** DESIGN-TIME (tenant) template — the group's published version the base was cloned from. */
+  designTimeWorkflowTemplateId: number | null
+  workflowTemplateGroupId: number | null
+  /** Prior base clones (each roll-forward mints a new base and archives the old). */
+  previousBaseWorkflowTemplateIds: number[]
+}
+
 // ============================================================================
 // Campaigns (a template group's running instance at the tenant level)
 // ============================================================================
@@ -346,13 +394,62 @@ export interface Campaign {
   status?: string
   description?: string
   startDate?: string
+  category?: string
   workflowCategory?: string
+  /** Grid-row shape: flat group id/name (from `listCampaigns`). */
   workflowTemplateGroupId?: number
   workflowTemplateGroupName?: string
+  /**
+   * GET-one shape: the CAMPAIGN BASE template — the clone this campaign's journeys
+   * copy from. `designTimeWorkflowTemplateId` points back to the group's published
+   * (design-time) template it was cloned from. Present only on the GET, not the grid row.
+   */
+  baseWorkflowTemplate?: {
+    id: number
+    name?: string
+    designTimeWorkflowTemplateId?: number
+    lastTimeStepConfigUpdated?: string
+  }
+  /** GET-one shape: the nested group object, incl. its `published`/`draft` template refs. */
+  workflowTemplateGroup?: {
+    id: number
+    name?: string
+    type?: string
+    published?: { id: number; name?: string }
+    draft?: { id: number; name?: string }
+  }
+  /** Prior base-template clones (roll-forward history). GET-one shape. */
+  previousBaseWorkflowTemplates?: Array<{ id: number; name?: string }>
   ownerOrganization?: CampaignOrganization
   sharedPartnerOrganizations?: CampaignSharedPartner[] | null
   created?: string
   updated?: string
+  [key: string]: unknown
+}
+
+/** One status bucket in a campaign dashboard rollup (incl. a "Total" bucket). */
+export interface CampaignDashboardCount {
+  number: number
+  /** Config-defined journey status, e.g. "In Progress" | "Completed" | "Cancelled" | "On Hold" | "Total". */
+  status: string
+}
+
+/** Optional filters for the dashboard rollup; defaults match the platform UI. */
+export interface CampaignDashboardOptions {
+  /** Time bucketing for the calendar view. Default "week". */
+  calendar?: "day" | "week" | "month" | (string & {})
+  /** Restrict to journeys carrying these label-tag ids. */
+  journeyTags?: number[]
+  /** Restrict the rollup to specific step ids. */
+  steps?: number[]
+}
+
+/** POST /api/v2/health/workflow-campaign/{id}/dashboard — journey counts by status. */
+export interface CampaignDashboard {
+  total: CampaignDashboardCount[]
+  calendar: string
+  tenantId: number
+  campaignId: number
   [key: string]: unknown
 }
 

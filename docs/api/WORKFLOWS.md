@@ -11,8 +11,10 @@ Code: [`journey.ts`](../../lib/api/journey.ts),
 
 ```
 Campaign  (you know its id, from tenant config)
-  └─ WorkflowTemplateGroup  (draft / published versions)
-       └─ WorkflowTemplate  (rootNodes: the step-tree DEFINITION)
+  ├─ workflowTemplateGroup.published ─▶ WorkflowTemplate  (DESIGN-TIME: the one you author)
+  └─ baseWorkflowTemplate ───────────▶ WorkflowTemplate  (CAMPAIGN BASE: a clone of the
+       │                                 design-time one; NEW journeys copy from this)
+       └─ rootNodes  (the step-tree DEFINITION — a linked list)
             └─ Step definition  ──▶ Step configuration (the field schema)
 
 Journey = an INSTANCE of a template, started from a campaign
@@ -26,6 +28,16 @@ Journey = an INSTANCE of a template, started from a campaign
   fresh tenant. See [PROVISIONING.md](PROVISIONING.md). Resolved campaign ids are
   commonly cached in `Organization.customData.appData.<appId>` to skip lookups on
   later runs.
+- **A campaign points at TWO templates** (both on its GET —
+  `GET /api/v2/health/workflow-campaign/{id}`): `workflowTemplateGroup.published`
+  is the **design-time** template you author; `baseWorkflowTemplate` is the
+  **campaign base** — a *clone* minted for this campaign that its journeys copy
+  from (`baseWorkflowTemplate.designTimeWorkflowTemplateId` points back to the
+  design-time id). They're different ids. `previousBaseWorkflowTemplates[]` is the
+  roll-forward history. This is the [four-layer clone model](PROVISIONING.md#the-four-template-layers-where-you-edit-matters)
+  seen from a campaign — pick the layer by what you're doing:
+  `resolveTemplate()` → design-time (what you edit); `resolveCampaignTemplates()`
+  → the base clone (what a campaign's journeys actually run).
 - **Journey** — the running instance. Quirk: in the [query engine](QUERY.md) a
   journey is typed **`"WorkflowTemplate"`** (same name as the definition) —
   distinguish by the attributes present (`workflowCampaignId`, `status`,
@@ -61,6 +73,42 @@ Each field is a [`DynamicField`](../../lib/api/types.ts): `{ label, type,
 fieldIdentifier, value?, options?, requiredToSave?, requiredToComplete?, … }`.
 **Resolve fields by `label`; never hardcode `fieldIdentifier`** — see
 [DATA-MODEL.md § Attributes](DATA-MODEL.md#attributes-two-meanings).
+
+## Retrieving a template's step-tree (dynamically)
+
+`GET /api/v2/health/workflow-template/{id}` returns the template's `rootNodes` —
+the step-tree definition as a linked list (each node nests its successor via
+`.node`). Use it to walk a campaign's steps *without* a running journey (e.g. to
+render a config UI or resolve a step id by name):
+
+```ts
+import {
+  resolveCampaignTemplates, fetchWorkflowTemplate, flattenTemplateNodes,
+  fetchStepConfiguration, getDynamicFields,
+} from "@/lib/api"
+
+// 1. Which template do this campaign's journeys actually run? → the CAMPAIGN BASE clone.
+const refs = await resolveCampaignTemplates(campaignId)
+const templateId = refs.data!.baseWorkflowTemplateId!   // not the design-time id
+
+// 2. Fetch its definition and linearize the node chain.
+const tpl = await fetchWorkflowTemplate(templateId)
+const steps = flattenTemplateNodes(tpl.data?.rootNodes)  // [{ id, name, key, availableStepId }, …]
+
+// 3. Any step's field schema (before a journey exists):
+const cfg = await fetchStepConfiguration(templateId, steps[1].id)
+const fields = getDynamicFields(cfg.data)
+```
+
+> `flattenTemplateNodes` follows the single-successor `.node` chain (the common
+> linear case). Branching/decision templates need their own traversal — inspect
+> `key` / `metadata.nodeType`. `metadata` is canvas-only (position/style); ignore
+> it for logic.
+>
+> **Which template id?** `resolveTemplate()` → design-time (the version you
+> author/publish); `resolveCampaignTemplates()` → the campaign base clone (what a
+> campaign's live journeys copy from). Reading the *live* config for a running
+> campaign means the base clone.
 
 ## Journey lifecycle
 
@@ -165,6 +213,24 @@ import { updateJourneyStatus, assignUsersToJourneys, listJourneys } from "@/lib/
 await listJourneys<MyRow>({ filterBy: [{ key: "workflowCampaignId", value: campaignId, operator: "equals" }] })
 await updateJourneyStatus([journeyId], "On Hold")   // status strings are app/config-defined
 await assignUsersToJourneys([journeyId], [userId])  // note: array-wrapped body
+```
+
+## Campaign dashboard (KPIs)
+
+A campaign-level rollup of its journeys' counts by status — the numbers behind
+the campaign detail screen. The `total[]` array mixes per-status buckets with a
+`"Total"` bucket; `dashboardCountsByStatus` flattens it to a `{ status: number }`
+map.
+
+```ts
+import { fetchCampaignDashboard, dashboardCountsByStatus } from "@/lib/api"
+
+const dash = await fetchCampaignDashboard(campaignId)             // { calendar: "week", journeyTags: [], steps: [] }
+const counts = dashboardCountsByStatus(dash.data)
+// → { "In Progress": 7, Completed: 81, Cancelled: 684, "On Hold": 0, Total: 772 }
+
+// Optional filters: narrow to label-tag ids and/or step ids, change the calendar bucket.
+await fetchCampaignDashboard(campaignId, { calendar: "month", journeyTags: [tagId], steps: [stepId] })
 ```
 
 ## Attachments & comments

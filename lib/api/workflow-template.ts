@@ -3,26 +3,44 @@
  * 1health API — workflow template hierarchy (the "definition" side)
  * =============================================================================
  *
- * Resolves the template chain that sits behind a campaign:
+ * Resolves the template chain that sits behind a campaign. A campaign points at
+ * TWO distinct templates (both on the campaign GET) — know which one you want:
  *
- *   Campaign ──▶ WorkflowTemplateGroup (draft / published)
- *            └──▶ WorkflowTemplate (rootNodes: the step-tree definition)
- *                 └──▶ Step definition ──▶ Step configuration (field schema)
+ *   Campaign
+ *     ├─ workflowTemplateGroup.published  ─▶ DESIGN-TIME template (the tenant
+ *     │                                      template you author/publish)
+ *     └─ baseWorkflowTemplate ────────────▶ CAMPAIGN BASE template: a CLONE of the
+ *                                            design-time one, minted for this campaign.
+ *                                            NEW journeys copy from THIS.
+ *   WorkflowTemplate ──▶ rootNodes (the step-tree definition, a linked list)
+ *                        └─ Step definition ──▶ Step configuration (field schema)
  *
- * You need this when you must know a step's field schema (labels, types,
- * options, and the per-environment `fieldIdentifier` GUIDs) BEFORE you have a
- * running journey — e.g. to pre-validate input or resolve field GUIDs by label.
- * If you already have a journey + step id, `journey-step.fetchStepInfo` returns
- * the same field schema plus current values, and is simpler.
+ *   - `resolveTemplate(campaignId)`        → the GROUP's published/draft template
+ *                                            (design-time layer).
+ *   - `resolveCampaignTemplates(campaignId)` → the CAMPAIGN BASE clone + design-time
+ *                                            parent + roll-forward history.
  *
- * There is NO "list campaigns/templates" endpoint — campaign ids come from
- * out-of-band tenant config (see docs/api/WORKFLOWS.md § Discovering campaigns).
+ * You need the field schema (labels, types, options, per-environment
+ * `fieldIdentifier` GUIDs) BEFORE a running journey — e.g. to pre-validate input
+ * or resolve field GUIDs by label. If you already have a journey + step id,
+ * `journey-step.fetchStepInfo` returns the same schema plus current values.
+ *
+ * Campaigns and template groups ARE listable — see `campaign.listCampaigns` /
+ * `endpoints.templateGroupList` and docs/api/PROVISIONING.md.
  * =============================================================================
  */
 
 import { callApi, type ApiResponse } from "./client"
 import { endpoints } from "./config"
-import type { DynamicField, StepConfiguration, ResolvedTemplate } from "./types"
+import type {
+  DynamicField,
+  StepConfiguration,
+  ResolvedTemplate,
+  WorkflowTemplateDefinition,
+  WorkflowTemplateNode,
+  CampaignTemplateRefs,
+  Campaign,
+} from "./types"
 
 /** GET a campaign; returns its `workflowTemplateGroup.id`. */
 export async function fetchCampaignGroupId(campaignId: number): Promise<number | null> {
@@ -47,8 +65,11 @@ export async function fetchTemplateIdFromGroup(
 }
 
 /**
- * Walk campaign → group → template in one call. Prefer published, fall back to
- * draft. Returns all resolved ids so you can cache them.
+ * Walk campaign → group → template in one call, resolving the **design-time**
+ * (tenant) template — the group's published version, falling back to draft. This
+ * is the template you author; it is NOT the per-campaign clone journeys copy from.
+ * For that, use {@link resolveCampaignTemplates}. Returns all resolved ids so you
+ * can cache them.
  */
 export async function resolveTemplate(campaignId: number): Promise<ApiResponse<ResolvedTemplate>> {
   try {
@@ -70,6 +91,76 @@ export async function resolveTemplate(campaignId: number): Promise<ApiResponse<R
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "resolveTemplate failed" }
   }
+}
+
+/**
+ * Read a campaign's template refs (from the campaign GET). Distinguishes the
+ * CAMPAIGN BASE clone (`baseWorkflowTemplateId` — what new journeys copy from)
+ * from the DESIGN-TIME template it was cloned from
+ * (`designTimeWorkflowTemplateId`, == the group's published id), plus the
+ * roll-forward history. Use this when you need the template a campaign's journeys
+ * actually run — e.g. to read the *live* step config for THIS campaign.
+ */
+export async function resolveCampaignTemplates(
+  campaignId: number,
+): Promise<ApiResponse<CampaignTemplateRefs>> {
+  const res = await callApi<Campaign>(
+    "workflowTemplate/resolveCampaignTemplates",
+    endpoints.workflowCampaign(campaignId),
+  )
+  if (!res.success || !res.data) {
+    return { success: false, error: res.error ?? `Failed to fetch campaign ${campaignId}`, statusCode: res.statusCode }
+  }
+  const c = res.data
+  return {
+    success: true,
+    data: {
+      campaignId,
+      baseWorkflowTemplateId: c.baseWorkflowTemplate?.id ?? null,
+      designTimeWorkflowTemplateId:
+        c.baseWorkflowTemplate?.designTimeWorkflowTemplateId ?? c.workflowTemplateGroup?.published?.id ?? null,
+      workflowTemplateGroupId: c.workflowTemplateGroup?.id ?? c.workflowTemplateGroupId ?? null,
+      previousBaseWorkflowTemplateIds: (c.previousBaseWorkflowTemplates ?? []).map((t) => t.id),
+    },
+  }
+}
+
+/** Convenience: just the CAMPAIGN BASE template id (what this campaign's journeys clone from). */
+export async function fetchCampaignBaseTemplateId(campaignId: number): Promise<number | null> {
+  const res = await resolveCampaignTemplates(campaignId)
+  return res.data?.baseWorkflowTemplateId ?? null
+}
+
+/**
+ * GET a template's full definition — its `rootNodes` step-tree. Works for any
+ * template id (design-time OR campaign base). Pair with `flattenTemplateNodes`
+ * to get an ordered step list, then `fetchStepConfiguration` for a step's fields.
+ */
+export async function fetchWorkflowTemplate(templateId: number): Promise<ApiResponse<WorkflowTemplateDefinition>> {
+  return callApi<WorkflowTemplateDefinition>(
+    "workflowTemplate/fetchWorkflowTemplate",
+    endpoints.workflowTemplate(templateId),
+  )
+}
+
+/**
+ * Linearize a template's nested `rootNodes` (each node nests its successor via
+ * `.node`) into a flat, ordered step list. Assumes the common single-successor
+ * chain; branching/decision nodes (multiple children) aren't followed — inspect
+ * `key`/`metadata.nodeType` and walk those yourself if your template branches.
+ */
+export function flattenTemplateNodes(
+  rootNodes: WorkflowTemplateNode[] | undefined | null,
+): WorkflowTemplateNode[] {
+  const out: WorkflowTemplateNode[] = []
+  const seen = new Set<number>()
+  let cur = rootNodes?.[0]
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id)
+    out.push(cur)
+    cur = cur.node
+  }
+  return out
 }
 
 /**

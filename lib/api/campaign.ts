@@ -14,6 +14,7 @@
  *   POST /api/v2/health/workflow-campaign/{id}/run        - activate
  *   POST /api/v2/health/workflow-campaign/{id}/share      - share with partners
  *   GET  /api/v2/health/workflow-campaign/{id}            - fetch one
+ *   POST /api/v2/health/workflow-campaign/{id}/dashboard  - KPI rollup
  *   POST /api/v3/health/grid/workflow-campaign            - list (grid)
  * =============================================================================
  */
@@ -21,7 +22,14 @@
 import { callApi, type ApiResponse } from "./client"
 import { endpoints } from "./config"
 import { runGridQuery, type GridPageOptions } from "./grid"
-import type { Campaign, CreateCampaignInput, ShareTarget, PaginatedResponse } from "./types"
+import type {
+  Campaign,
+  CreateCampaignInput,
+  ShareTarget,
+  PaginatedResponse,
+  CampaignDashboard,
+  CampaignDashboardOptions,
+} from "./types"
 
 /** ISO timestamp with milliseconds zeroed (the format the API expects). */
 function isoStartDate(date = new Date()): string {
@@ -74,6 +82,34 @@ export async function shareCampaignWithPartner(
 /** Fetch a single campaign by id. */
 export async function fetchCampaign(campaignId: number): Promise<ApiResponse<Campaign>> {
   return callApi<Campaign>("campaign/fetchCampaign", endpoints.workflowCampaign(campaignId))
+}
+
+/**
+ * Fetch a campaign's dashboard rollup — journey counts by status (plus a "Total"
+ * bucket). Filters are optional; defaults mirror the platform UI
+ * (`{ calendar: "week", journeyTags: [], steps: [] }`). Pair with
+ * `dashboardCountsByStatus` to get a `{ status: number }` map.
+ */
+export async function fetchCampaignDashboard(
+  campaignId: number,
+  options: CampaignDashboardOptions = {},
+): Promise<ApiResponse<CampaignDashboard>> {
+  const body = {
+    calendar: options.calendar ?? "week",
+    journeyTags: options.journeyTags ?? [],
+    steps: options.steps ?? [],
+  }
+  return callApi<CampaignDashboard>("campaign/fetchCampaignDashboard", endpoints.campaignDashboard(campaignId), {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+}
+
+/** Flatten a dashboard's `total[]` (`[{ number, status }]`) into a `{ status: number }` map. */
+export function dashboardCountsByStatus(dashboard: CampaignDashboard | undefined | null): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const row of dashboard?.total ?? []) out[row.status] = row.number
+  return out
 }
 
 /**

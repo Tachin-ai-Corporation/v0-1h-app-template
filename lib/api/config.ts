@@ -125,6 +125,8 @@ export const endpoints = {
   campaignRun: (campaignId: number | string, batchSize = 33) =>
     `/api/v2/health/workflow-campaign/${campaignId}/run?batchSize=${batchSize}`,
   campaignShare: (campaignId: number | string) => `/api/v2/health/workflow-campaign/${campaignId}/share`,
+  /** Campaign KPI rollup (journey counts by status). Body: { calendar, journeyTags, steps }. */
+  campaignDashboard: (campaignId: number | string) => `/api/v2/health/workflow-campaign/${campaignId}/dashboard`,
 
   // --- Partnerships (resolve share targets) --------------------------------
   partnerships: () => "/api/v2/organization/partnership",
