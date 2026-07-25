@@ -124,7 +124,7 @@ export interface PaginatedResponse<T> {
 // Custom data — POST /api/v2/data/custom-data/bulk
 // ============================================================================
 
-/** APPEND = deep-merge into existing customData; REPLACE = overwrite the blob. */
+/** APPEND = shallow (top-level-only) merge into customData; REPLACE = overwrite the blob. */
 export type CustomDataOperation = "APPEND" | "REPLACE"
 
 export interface CustomDataUpdate {

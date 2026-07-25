@@ -73,6 +73,7 @@ export { runGridQuery, fetchAllGridPages, type GridPageOptions } from "./grid"
 export {
   updateCustomData,
   appendCustomData,
+  mergeCustomData,
   replaceCustomData,
   readCustomData,
   deleteCustomDataKeys,

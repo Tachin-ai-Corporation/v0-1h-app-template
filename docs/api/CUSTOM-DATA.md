@@ -26,13 +26,13 @@ The bulk endpoint patches any instance. Two operations:
 
 | Operation | Effect |
 |---|---|
-| `APPEND` | Deep-merges into existing `customData` (preserves sibling keys). **Default choice.** |
+| `APPEND` | **Shallow (top-level-only) merge.** Top-level keys you omit are kept, but any key you send has its whole value **replaced** — nested objects are *not* deep-merged. |
 | `REPLACE` | Overwrites the entire blob. |
 
 ```ts
 import { appendCustomData, replaceCustomData, updateCustomData } from "@/lib/api"
 
-// merge (keeps everything else)
+// merge a TOP-LEVEL field (other top-level keys are kept)
 await appendCustomData(orgId, { lastSyncedAt: "2026-07-23T00:00:00Z" })
 
 // overwrite the whole blob
@@ -45,20 +45,37 @@ await updateCustomData([
 ])
 ```
 
-## Namespacing: `appData.<appId>`
+> ⚠️ **APPEND does not deep-merge.** It merges only the *top* level: any key you
+> include is overwritten wholesale — nested objects and all. So a partial write to
+> a nested key silently drops that object's other fields. This is the #1 customData
+> footgun; the next section is how to avoid it.
 
-If the instance might be shared with other 1health apps, put your data under
-`appData.<yourAppId>` so you never clobber another app's keys:
+## Updating nested / namespaced data safely
+
+Namespacing keeps apps from colliding: put your data under `appData.<yourAppId>`.
+But because APPEND is shallow, a *partial* write to that namespace —
+`{ appData: { <appId>: { phase: "x" } } }` — replaces the **entire** `appData`
+object, wiping every other app's namespace **and** your own sibling keys
+(`index`, prior fields, …). That's the footgun.
+
+To update one nested field without losing its siblings, read → deep-merge
+client-side → write the complete subtree. `mergeCustomData` does exactly that:
 
 ```ts
-import { appendCustomData, appData } from "@/lib/api"
+import { mergeCustomData, appData } from "@/lib/api"
 
-await appendCustomData(orgId, appData(appId, { settings: { theme: "dark" } }))
-// => customData.appData["<appId>"].settings.theme = "dark"
+// safe partial update of a namespaced field — siblings survive
+await mergeCustomData("Organization", orgId, appData(appId, { phase: "x" }))
+// customData.appData["<appId>"].phase = "x"   (…index and other apps preserved)
 ```
 
-`appId` is your application's own namespace key (commonly `NEXT_PUBLIC_APP_ID`,
-defaulting to `"1"`) — **not** a 1health object-type or attribute id.
+The first arg (`"Organization"`) is the owning object-type key — needed to read
+the current blob before merging. `appId` is your application's own namespace key
+(commonly `NEXT_PUBLIC_APP_ID`, defaulting to `"1"`) — **not** a 1health
+object-type or attribute id.
+
+**Rule of thumb:** flat top-level field → `appendCustomData`; anything nested →
+`mergeCustomData`.
 
 ## Deleting a key (no delete verb)
 

@@ -102,7 +102,7 @@ import { runQuery, eq, appendCustomData, createJourney } from "@/lib/api"
 // Read an entity + its attributes via /api/v2/query
 const res = await runQuery({ key: "Person", attributes: ["id", "customData"], filter: eq("id", personId), limit: 1 })
 
-// Patch an instance's customData (deep-merge)
+// Patch a top-level customData field (APPEND is a shallow merge; use mergeCustomData for nested)
 await appendCustomData(orgId, { lastSyncedAt: new Date().toISOString() })
 
 // Start a workflow instance

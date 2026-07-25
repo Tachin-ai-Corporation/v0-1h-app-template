@@ -92,6 +92,17 @@ go beyond them.
   Webhook `header` is a plain object (not an array); email `additionalEmails` is
   the recipient list; omit `id` on write. See [PROVISIONING.md](PROVISIONING.md#application-notification--webhook--email-config).
 
+## Custom data writes
+
+- **`APPEND` is a shallow (top-level-only) merge — it does NOT deep-merge.**
+  Top-level keys you omit survive, but any key you include has its whole value
+  replaced. So a partial write under a nested / namespaced key (e.g.
+  `appData.<appId>`) replaces that **entire** subtree — silently wiping its sibling
+  keys *and* other apps' namespaces. To update one nested field: read → deep-merge
+  client-side → write the complete subtree. `mergeCustomData` does this; prefer it
+  over a raw `appendCustomData` for anything nested. →
+  [CUSTOM-DATA.md](CUSTOM-DATA.md#updating-nested--namespaced-data-safely)
+
 ## Deletion
 
 - **No general HTTP `DELETE`.** Deletion is a flag in a POST/PUT body
