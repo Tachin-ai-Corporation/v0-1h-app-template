@@ -57,18 +57,22 @@ export function getCookie(name: string): string | null {
 /**
  * Sets a cookie with the given name, value, and maxAge (in seconds)
  */
+function browserCookieAttributes(): string {
+  const isSecure = window.location.protocol === "https:"
+  return isSecure ? "; SameSite=None; Secure" : "; SameSite=Lax"
+}
+
 export function setCookie(name: string, value: string, maxAge: number): void {
   if (typeof document === "undefined") return
-  const secure = window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}${browserCookieAttributes()}`
 }
 
 /**
- * Deletes a cookie by setting its maxAge to 0
+ * Deletes a cookie using the same scope and attributes used when it was set.
  */
 export function deleteCookie(name: string): void {
   if (typeof document === "undefined") return
-  document.cookie = `${name}=; path=/; max-age=0`
+  document.cookie = `${name}=; Path=/; Max-Age=0${browserCookieAttributes()}`
 }
 
 // ============================================================================
