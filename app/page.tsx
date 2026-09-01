@@ -5,8 +5,9 @@ import { HomePageClient } from "@/components/home-page-client"
 export default async function HomePage() {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")
+  const refreshToken = cookieStore.get("refresh_token")
 
-  if (!accessToken?.value) {
+  if (!accessToken?.value && !refreshToken?.value) {
     redirect("/auth")
   }
 
