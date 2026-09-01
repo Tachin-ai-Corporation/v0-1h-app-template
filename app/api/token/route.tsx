@@ -47,6 +47,13 @@ interface DecryptedPayload {
 
 type Environment = "demo" | "prod"
 
+const sessionCookieOptions = {
+  httpOnly: false,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
+  path: "/",
+}
+
 /**
  * Environment-aware configuration.
  * Resolves the correct secret key and base URL based on the chosen environment.
@@ -154,19 +161,13 @@ export async function POST(req: Request) {
 
     // Store the environment and base URL in cookies
     cookieStore.set("onehealth_environment", environment, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
     })
 
     cookieStore.set("onehealth_base_url", baseUrl, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
     })
 
     if (!secretKey) {
@@ -270,38 +271,35 @@ export async function POST(req: Request) {
     const refreshTokenMaxAge = accessTokenMaxAge * 2
 
     cookieStore.set("access_token", authData.access_token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: accessTokenMaxAge,
-      path: "/",
     })
 
     cookieStore.set("refresh_token", authData.refresh_token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: refreshTokenMaxAge,
-      path: "/",
     })
 
     const tokenExpiresAt = Math.floor(Date.now() / 1000) + accessTokenMaxAge
     const refreshExpiresAt = Math.floor(Date.now() / 1000) + refreshTokenMaxAge
 
     cookieStore.set("refresh_token_expires_at", String(refreshExpiresAt), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: refreshTokenMaxAge,
-      path: "/",
     })
 
     cookieStore.set("token_expires_at", String(tokenExpiresAt), {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      ...sessionCookieOptions,
       maxAge: refreshTokenMaxAge,
-      path: "/",
+    })
+
+    cookieStore.set("user_id", String(payload.required.user.id), {
+      ...sessionCookieOptions,
+      maxAge: refreshTokenMaxAge,
+    })
+    cookieStore.set("user_tenant_id", String(payload.required.tenant.id), {
+      ...sessionCookieOptions,
+      maxAge: refreshTokenMaxAge,
     })
 
     try {
@@ -321,22 +319,10 @@ export async function POST(req: Request) {
         // Store tenant org ID in cookie for client-side access
         if (tenantData.organization?.id) {
           cookieStore.set("user_org_id", String(tenantData.organization.id), {
-            httpOnly: false,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            ...sessionCookieOptions,
             maxAge: refreshTokenMaxAge,
-            path: "/",
           })
         }
-
-        // Store user ID from the decrypted payload
-        cookieStore.set("user_id", String(payload.required.user.id), {
-          httpOnly: false,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          maxAge: refreshTokenMaxAge,
-          path: "/",
-        })
       }
     } catch (tenantErr) {
       // Non-fatal - continue with token response

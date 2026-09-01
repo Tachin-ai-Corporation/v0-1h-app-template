@@ -57,18 +57,22 @@ export function getCookie(name: string): string | null {
 /**
  * Sets a cookie with the given name, value, and maxAge (in seconds)
  */
+function browserCookieAttributes(): string {
+  const isSecure = window.location.protocol === "https:"
+  return isSecure ? "; SameSite=None; Secure" : "; SameSite=Lax"
+}
+
 export function setCookie(name: string, value: string, maxAge: number): void {
   if (typeof document === "undefined") return
-  const secure = window.location.protocol === "https:" ? "; Secure" : ""
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAge}${browserCookieAttributes()}`
 }
 
 /**
- * Deletes a cookie by setting its maxAge to 0
+ * Deletes a cookie using the same scope and attributes used when it was set.
  */
 export function deleteCookie(name: string): void {
   if (typeof document === "undefined") return
-  document.cookie = `${name}=; path=/; max-age=0`
+  document.cookie = `${name}=; Path=/; Max-Age=0${browserCookieAttributes()}`
 }
 
 // ============================================================================
@@ -87,6 +91,19 @@ export function getAccessToken(): string | null {
  */
 export function getRefreshToken(): string | null {
   return getCookie("refresh_token")
+}
+
+const TOKEN_REFRESH_WINDOW_SECONDS = 30 * 60
+
+function shouldRefreshAccessToken(): boolean {
+  const expiresAtCookie = getCookie("token_expires_at")
+  if (!expiresAtCookie) return false
+
+  const expiresAt = Number.parseInt(expiresAtCookie, 10)
+  if (Number.isNaN(expiresAt)) return false
+
+  const now = Math.floor(Date.now() / 1000)
+  return expiresAt - now < TOKEN_REFRESH_WINDOW_SECONDS
 }
 
 /**
@@ -347,6 +364,16 @@ export class SessionExpiredError extends Error {
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   let accessToken = getAccessToken()
+
+  // Refresh before the request when the access token has less than 30 minutes left.
+  // If a still-valid token cannot be refreshed, let the request proceed and retain
+  // the existing 401 retry behavior as a final recovery path.
+  if (accessToken && shouldRefreshAccessToken()) {
+    const refreshed = await refreshToken()
+    if (refreshed) {
+      accessToken = getAccessToken()
+    }
+  }
 
   // No access token - try to refresh first
   if (!accessToken) {
