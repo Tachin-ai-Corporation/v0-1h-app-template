@@ -171,10 +171,9 @@ function AuthContent() {
       }
 
       setAuthState("success")
-      const redirectRoute = process.env.NEXT_PUBLIC_DEFAULT_LAUNCH_REDIRECT_ROUTE || "/"
 
       setTimeout(() => {
-        router.push(redirectRoute)
+        router.push("/")
       }, 1200) // Allow time for success animation
     } catch {
       setAuthState("error")
