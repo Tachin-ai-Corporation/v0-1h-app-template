@@ -22,6 +22,12 @@
  * There is NO delete verb. To remove a key you read the blob, drop the key
  * client-side, and REPLACE — `deleteCustomDataKeys` does exactly that.
  *
+ * ⚠️ Every read → modify → write must ABORT when the read fails. A write built
+ * on an empty "nothing read" base wipes the data you meant to keep (APPEND drops
+ * the subtree's siblings; REPLACE drops everything). `mergeCustomData` and
+ * `deleteCustomDataKeys` read with `fetchCustomData` and write nothing unless
+ * the instance was actually read. Do the same in your own read-modify-writes.
+ *
  * Convention: namespace anything YOUR app owns under `appData.<appId>` so
  * multiple apps sharing an instance don't collide — but pair it with
  * `mergeCustomData` (not raw APPEND) for partial updates (`appData` helper).
@@ -30,10 +36,10 @@
  * =============================================================================
  */
 
-import { callApi, type ApiResponse } from "./client"
+import { callApi, ok, type ApiResponse } from "./client"
 import { endpoints } from "./config"
 import type { CustomDataOperation, CustomDataUpdate } from "./types"
-import { runQueryRows, findAttr, parseCustomData, eq } from "./query"
+import { runQuery, findAttr, parseCustomData, eq } from "./query"
 
 /** Low-level bulk patch. Accepts one or many updates. */
 export async function updateCustomData(
@@ -68,22 +74,50 @@ export async function replaceCustomData(
 }
 
 /**
- * Read an instance's `customData` via the generic query engine.
- * `type` is the data-object-type key (e.g. "Organization"). Returns `{}` if not
- * found or on error.
+ * Read an instance's `customData` via the generic query engine, reporting
+ * failure instead of hiding it. `type` is the data-object-type key (e.g.
+ * "Organization").
+ *
+ *   - `success: true`  — the instance was read; `data` is its blob (`{}` when it
+ *                        has no customData yet).
+ *   - `success: false` — the query failed (network, expired session, gateway
+ *                        refusal), or the instance didn't come back (not found,
+ *                        or not readable by this caller).
+ *
+ * Use this before any read → modify → write, and write nothing on failure.
  */
-export async function readCustomData(
+export async function fetchCustomData(
   type: string,
   instanceId: number,
-): Promise<Record<string, unknown>> {
-  const rows = await runQueryRows({
+): Promise<ApiResponse<Record<string, unknown>>> {
+  const res = await runQuery({
     key: type,
     attributes: ["id", "customData"],
     filter: eq("id", instanceId),
     limit: 1,
   })
-  if (rows.length === 0) return {}
-  return parseCustomData(findAttr(rows[0], "customData"))
+  const rows = res.success ? res.data?.data : undefined
+  if (!Array.isArray(rows)) {
+    return { success: false, error: res.error ?? `Could not read customData of ${type} ${instanceId}`, statusCode: res.statusCode }
+  }
+  if (rows.length === 0) {
+    return { success: false, error: `${type} ${instanceId} not found (or not readable)`, statusCode: res.statusCode }
+  }
+  return ok(parseCustomData(findAttr(rows[0], "customData")), res.statusCode)
+}
+
+/**
+ * Read an instance's `customData` for DISPLAY. Returns `{}` if not found or on
+ * error — so never write back what it returns; a failed read looks like an
+ * empty blob. For read → modify → write use `fetchCustomData`, or
+ * `mergeCustomData` / `deleteCustomDataKeys`.
+ */
+export async function readCustomData(
+  type: string,
+  instanceId: number,
+): Promise<Record<string, unknown>> {
+  const res = await fetchCustomData(type, instanceId)
+  return res.success && res.data ? res.data : {}
 }
 
 /** True for a mergeable plain object (not null, not an array). */
@@ -109,6 +143,8 @@ function deepMerge(base: unknown, patch: unknown): unknown {
  * top-level key).
  *
  * `type` is the owning object-type key (e.g. "Organization"), needed to read.
+ * If that read fails, nothing is written and the read's error is returned —
+ * merging onto an empty base would wipe the subtree's existing siblings.
  *
  * @example
  *   await mergeCustomData("Organization", orgId, appData(appId, { phase: "x" }))
@@ -119,7 +155,9 @@ export async function mergeCustomData(
   instanceId: number,
   data: Record<string, unknown>,
 ): Promise<ApiResponse<unknown>> {
-  const current = await readCustomData(type, instanceId)
+  const read = await fetchCustomData(type, instanceId)
+  if (!read.success || !read.data) return read
+  const current = read.data
   const merged: Record<string, unknown> = {}
   for (const key of Object.keys(data)) merged[key] = deepMerge(current[key], data[key])
   return appendCustomData(instanceId, merged)
@@ -128,13 +166,17 @@ export async function mergeCustomData(
 /**
  * Remove top-level keys from an instance's `customData` (read → drop → REPLACE).
  * Demonstrates the delete-by-omission pattern; extend for nested paths as needed.
+ * If the read fails, nothing is written and the read's error is returned — a
+ * REPLACE built on an empty base would erase the whole blob.
  */
 export async function deleteCustomDataKeys(
   type: string,
   instanceId: number,
   keys: string[],
 ): Promise<ApiResponse<unknown>> {
-  const current = await readCustomData(type, instanceId)
+  const read = await fetchCustomData(type, instanceId)
+  if (!read.success || !read.data) return read
+  const current = read.data
   for (const key of keys) delete current[key]
   return replaceCustomData(instanceId, current)
 }

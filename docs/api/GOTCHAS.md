@@ -102,6 +102,13 @@ go beyond them.
   client-side → write the complete subtree. `mergeCustomData` does this; prefer it
   over a raw `appendCustomData` for anything nested. →
   [CUSTOM-DATA.md](CUSTOM-DATA.md#updating-nested--namespaced-data-safely)
+- **A read → modify → write must abort when the read fails.** `readCustomData`
+  returns `{}` both for "nothing stored" and for a failed or empty read (network,
+  expired session, gateway refusal, instance not returned). Writing on top of that
+  `{}` wipes data: APPEND drops the subtree's siblings, and REPLACE erases the whole
+  blob. Read with `fetchCustomData` and write nothing unless `success` is true.
+  `mergeCustomData` and `deleteCustomDataKeys` do this; they return the read's
+  error instead of writing. → [CUSTOM-DATA.md](CUSTOM-DATA.md#reading)
 
 ## Deletion
 
