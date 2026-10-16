@@ -34,6 +34,13 @@ Code: [`lib/api/query.ts`](../../lib/api/query.ts), [`lib/api/grid.ts`](../../li
 }
 ```
 
+> **Keep `limit`/`offset` at the end of the body.** 1health's gateway refuses a
+> body that *starts* with `limit` or `offset`. Its 403 carries no CORS headers,
+> so a browser reports only `TypeError: Failed to fetch` and a CORS error on
+> `/api/v2/query`. `runQuery` always puts your fields first, so this only bites
+> hand-built bodies such as `JSON.stringify({ limit, offset, ...request })`.
+> Symptom, cause and fix are in [GOTCHAS.md](GOTCHAS.md#transport--environment).
+
 Run it with the typed helper:
 
 ```ts
@@ -220,5 +227,6 @@ A grid view is almost always **pre-scoped by an id** — pass it as the first
 - Complex reads the platform exposes only via GraphQL (rare) → `POST /api/graphql`
   (a third path; not wrapped here — use `callApiRaw` if you need it).
 
-See also [GOTCHAS.md](GOTCHAS.md) for query-specific traps (prefix drift,
-unreliable server-side filters on nested JSON, pagination param inconsistency).
+See also [GOTCHAS.md](GOTCHAS.md) for query-specific traps (body field order,
+prefix drift, unreliable server-side filters on nested JSON, pagination param
+inconsistency).

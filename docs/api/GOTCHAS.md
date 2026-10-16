@@ -111,6 +111,24 @@ go beyond them.
 
 ## Transport & environment
 
+- **"Failed to fetch" / a CORS error on `POST /api/v2/query` means the body
+  starts with `limit` or `offset`.**
+  - *Symptom:* in the browser, every query read fails with
+    `TypeError: Failed to fetch` (Firefox: "NetworkError when attempting to fetch
+    resource"; Safari: "Load failed"). The console shows "No
+    'Access-Control-Allow-Origin' header is present". There is no HTTP status to
+    inspect. Helpers built on the query engine come back empty, including
+    `runQueryRows`, `runQueryAll` and `readCustomData`.
+  - *Cause:* 1health's gateway refuses any query body whose **first** field is
+    `limit` or `offset`, before auth runs. It answers 403 with an HTML page and
+    no CORS headers, so the browser can't read it. A server-side call sees the
+    plain 403. Only the first field matters: bodies that start with `key`,
+    `attributes`, `filter` or `relationships` pass, as does a `limit` later in
+    the body or inside a relationship. Verified on demo 2026-10-15.
+  - *Fix:* serialize the request's own fields first and `limit`/`offset` last.
+    `runQuery` does this whatever order you pass the fields in. If you build a
+    query body yourself, start it with `key`, and never write
+    `JSON.stringify({ limit, offset, ...request })`.
 - **Always go through `authFetch`** (Bearer + refresh) and resolve the base URL
   per call. A raw `fetch` to a 1health endpoint will fail auth.
 - **API version prefix is not uniform** — mostly `v2`, grid/list is `v3`,
