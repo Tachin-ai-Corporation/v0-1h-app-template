@@ -135,6 +135,12 @@ export function buildFilter(
 /**
  * Run a `/api/v2/query`. Returns the full envelope (`{ data, ...pagination }`).
  *
+ * Body field ORDER matters: 1health's gateway refuses (403, no CORS headers)
+ * any query body whose first field is `limit` or `offset`. In a browser that
+ * surfaces only as "TypeError: Failed to fetch" plus a CORS console error. So
+ * the request's own fields are serialized first and `limit`/`offset` last,
+ * whatever order the caller wrote them in. See docs/api/GOTCHAS.md.
+ *
  * @example
  * const res = await runQuery({
  *   key: "Person",
@@ -144,9 +150,10 @@ export function buildFilter(
  * })
  */
 export async function runQuery(request: QueryRequest): Promise<ApiResponse<QueryResponse>> {
+  const { limit = 50, offset = 0, ...fields } = request
   return callApi<QueryResponse>("query/runQuery", endpoints.query(), {
     method: "POST",
-    body: JSON.stringify({ limit: 50, offset: 0, ...request }),
+    body: JSON.stringify({ ...fields, limit, offset }),
   })
 }
 
