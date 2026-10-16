@@ -12,13 +12,26 @@ Code: [`lib/api/custom-data.ts`](../../lib/api/custom-data.ts).
 owning instance via [`/api/v2/query`](QUERY.md). The helper wraps that:
 
 ```ts
-import { readCustomData } from "@/lib/api"
+import { readCustomData, fetchCustomData } from "@/lib/api"
 
+// for display: `{}` when not found OR when the read failed
 const data = await readCustomData("Organization", orgId) // => Record<string, unknown>
+
+// before a write: tells "read failed" apart from "nothing stored yet"
+const res = await fetchCustomData("Organization", orgId) // => ApiResponse<Record<string, unknown>>
+if (!res.success) throw new Error(res.error) // don't write on top of a failed read
 ```
 
-(It queries `attributes: ["id", "customData"]`, then parses — remembering
+(Both query `attributes: ["id", "customData"]`, then parse — remembering
 `customData` may arrive as a JSON string.)
+
+> ⚠️ **Never write back what `readCustomData` returns.** A failed read (network,
+> expired session, gateway refusal) and an instance that isn't returned both come
+> back as `{}`, indistinguishable from an empty blob. Merge onto that and APPEND,
+> and the subtree loses its siblings; drop a key from it and REPLACE, and the
+> whole blob is erased. Any read → modify → write must use `fetchCustomData` and
+> **abort when `success` is false**. `mergeCustomData` and `deleteCustomDataKeys`
+> already do.
 
 ## Writing — `POST /api/v2/data/custom-data/bulk`
 
@@ -70,7 +83,8 @@ await mergeCustomData("Organization", orgId, appData(appId, { phase: "x" }))
 ```
 
 The first arg (`"Organization"`) is the owning object-type key — needed to read
-the current blob before merging. `appId` is your application's own namespace key
+the current blob before merging. If that read fails, `mergeCustomData` writes
+nothing and returns the read's error. `appId` is your application's own namespace key
 (commonly `NEXT_PUBLIC_APP_ID`, defaulting to `"1"`) — **not** a 1health
 object-type or attribute id.
 
@@ -87,8 +101,12 @@ import { deleteCustomDataKeys } from "@/lib/api"
 await deleteCustomDataKeys("Organization", orgId, ["staleKey", "anotherStaleKey"])
 ```
 
-For nested keys, `readCustomData` → mutate the object → `replaceCustomData`.
-Don't assume APPEND-ing a payload without a key removes it — it won't.
+If the read fails, it writes nothing and returns the read's error — a REPLACE
+built on a failed read would erase the whole blob.
+
+For nested keys, `fetchCustomData` → abort unless `success` → mutate `data` →
+`replaceCustomData`. Don't assume APPEND-ing a payload without a key removes it —
+it won't.
 
 ## When to use customData vs a real attribute
 

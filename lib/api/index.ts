@@ -76,6 +76,7 @@ export {
   mergeCustomData,
   replaceCustomData,
   readCustomData,
+  fetchCustomData,
   deleteCustomDataKeys,
   appData,
 } from "./custom-data"
